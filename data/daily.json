@@ -1,0 +1,7 @@
+{
+  "schema_version": "t04-daily-store-v1",
+  "signal_id": "seoul-temperature-2m",
+  "record_timezone": "Asia/Seoul",
+  "generated_at": null,
+  "rows": []
+}

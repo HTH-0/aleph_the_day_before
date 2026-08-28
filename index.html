@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>오늘의 진짜 정보판 — 서울 기온</title>
+<meta name="description" content="공개 원천의 값 하나를 매일 기록하고, 어제와 비교하고, 데이터가 오지 않을 때도 정직하게 설명하는 정보판." />
+<meta name="color-scheme" content="light" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+<link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">오늘의 진짜 정보판 <span>· 서울 기온</span></div>
+    <div class="spacer"></div>
+    <span class="pill info" title="이 화면은 계정·로그인·인증·초대·비밀번호·OAuth·CAPTCHA 없이 열립니다">로그인 없음</span>
+    <span class="pill info" title="비밀키가 필요 없는 공개 API만 호출합니다">비밀키 없음</span>
+    <span class="pill" id="clock">--:--:-- KST</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ── 1. 지금 값 ─────────────────────────────── -->
+  <section class="section" id="live" style="margin-top:28px">
+    <div class="section-head">
+      <span class="eyebrow">01 · 지금 값</span>
+      <h2>공개 원천에서 방금 받은 값</h2>
+      <p class="section-note">브라우저가 직접 공개 API를 호출합니다. 키가 없으므로 이 요청에는 감출 것이 없습니다.</p>
+    </div>
+
+    <div class="card hero">
+      <div class="hero-main">
+        <p class="signal-q" id="signal-question">—</p>
+        <p class="signal-name" id="signal-name">—</p>
+
+        <div class="value-row">
+          <span class="value" id="live-value"><span class="skel"></span></span>
+          <span class="unit" id="live-unit"></span>
+          <span class="delta none" id="live-delta">어제 기록과 비교 중</span>
+        </div>
+        <p class="delta-caption" id="live-delta-caption"></p>
+
+        <dl class="honesty" id="honesty">
+          <div><dt>값의 상태</dt><dd id="h-freshness">확인 중<small id="h-freshness-sub">—</small></dd></div>
+          <div><dt>마지막 성공</dt><dd id="h-lastgood">—<small id="h-lastgood-sub">—</small></dd></div>
+          <div><dt>이번 시도</dt><dd id="h-attempt">—<small id="h-attempt-sub">—</small></dd></div>
+        </dl>
+
+        <div id="live-fail"></div>
+
+        <div class="btnbar">
+          <button class="primary" id="btn-refetch">지금 다시 조회</button>
+          <button id="btn-raw">원자료 보기</button>
+          <button id="btn-export">오늘 기록 내보내기</button>
+        </div>
+        <div id="live-extra"></div>
+      </div>
+
+      <div class="hero-side">
+        <dl class="facts" id="live-facts"></dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2. 대조표 ─────────────────────────────── -->
+  <section class="section" id="trace">
+    <div class="section-head">
+      <span class="eyebrow">02 · 대조 · T04-C04~C10</span>
+      <h2>원자료 · 저장값 · 화면값</h2>
+      <p class="section-note">같은 값이 세 자리에서 같은지 한 줄씩 보여 줍니다.</p>
+    </div>
+    <div class="card">
+      <div class="table-scroll"><table id="trace-table">
+        <thead><tr><th>항목</th><th>원자료(응답 그대로)</th><th>저장값(정규화)</th><th>화면값</th><th>일치</th></tr></thead>
+        <tbody><tr><td colspan="5" class="empty">조회를 기다리는 중입니다.</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ── 3. 보존된 일별 기록 ────────────────────── -->
+  <section class="section" id="daily">
+    <div class="section-head">
+      <span class="eyebrow">03 · 보존 · T04-C20~C24</span>
+      <h2>하루 한 줄로 남긴 실제 기록</h2>
+      <p class="section-note">저장소 파일 <code>data/daily.json</code>에 커밋되어 있습니다. 이 화면은 그 파일만 읽습니다.</p>
+    </div>
+    <div class="card">
+      <div class="table-scroll"><table id="daily-table">
+        <thead><tr>
+          <th>KST 날짜</th><th class="num">값</th><th>단위</th><th class="num">전일 대비</th>
+          <th>출처 관측 시각</th><th>조회 시각</th><th>record_id</th><th class="num">같은 날 갱신</th>
+        </tr></thead>
+        <tbody><tr><td colspan="8" class="empty">불러오는 중…</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card pad" id="recompute"></div>
+  </section>
+
+  <!-- ── 4. 장애 재생 ──────────────────────────── -->
+  <section class="section" id="lab">
+    <div class="section-head">
+      <span class="eyebrow">04 · 합성 재생 · T04-C12~C19, C26</span>
+      <h2>데이터가 안 올 때</h2>
+      <p class="section-note">아래 값은 전부 공개 결정론 fixture의 합성 시험값입니다. 실제 관측이 아닙니다.</p>
+    </div>
+    <div class="card lab">
+      <div class="lab-controls">
+        <div class="group">
+          <h4>초기화</h4>
+          <div class="stack"><button id="btn-reset">합성 상태 비우기 (reset)</button></div>
+        </div>
+        <div class="group">
+          <h4>정상 저장</h4>
+          <div class="stack" id="seq-normal"></div>
+        </div>
+        <div class="group">
+          <h4>외부 실패 다섯 종류</h4>
+          <div class="stack" id="seq-failures"></div>
+        </div>
+        <div class="group">
+          <h4>오류 뒤 회복</h4>
+          <div class="stack" id="seq-recover"></div>
+        </div>
+        <div class="group">
+          <h4>fixture 한 건씩</h4>
+          <div class="stack" id="seq-single"></div>
+        </div>
+      </div>
+      <div class="lab-view">
+        <dl class="metrics" id="lab-metrics"></dl>
+        <div id="lab-fail"></div>
+        <div class="table-scroll" style="margin-top:16px"><table id="lab-table">
+          <thead><tr><th>합성 날짜</th><th class="num">값</th><th>단위</th><th class="num">전일 대비</th><th>record_id</th><th class="num">갱신</th></tr></thead>
+          <tbody><tr><td colspan="6" class="empty">합성 상태가 비어 있습니다. 왼쪽에서 재생을 시작하세요.</td></tr></tbody>
+        </table></div>
+        <h4 style="font-size:11px;font-family:var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px">재생 기록</h4>
+        <div class="log"><ol id="lab-log"><li><span class="seq">—</span><span>아직 재생하지 않았습니다.</span></li></ol></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5. 자가검증 ───────────────────────────── -->
+  <section class="section" id="verify">
+    <div class="section-head">
+      <span class="eyebrow">05 · 자가검증</span>
+      <h2>계약이 정한 기대값과 대조</h2>
+      <p class="section-note">화면을 열면 7개 재생 순서를 전부 돌려 fixture의 <code>expected</code>와 맞춰 봅니다.</p>
+    </div>
+    <div class="card">
+      <div class="table-scroll"><table id="verify-table">
+        <thead><tr><th>재생 순서</th><th>마지막 단계</th><th>신선도 / 오류</th><th class="num">행</th><th class="num">마지막 정상값</th><th class="num">변화</th><th>판정</th></tr></thead>
+        <tbody><tr><td colspan="7" class="empty">실행 중…</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="pad" style="border-bottom:1px solid var(--line)">
+        <strong style="font-size:14px">공개 asset 해시 대조</strong>
+        <p class="section-note" id="pkg-id" style="margin-top:4px">—</p>
+      </div>
+      <div class="table-scroll"><table id="hash-table">
+        <thead><tr><th>파일</th><th class="num">바이트</th><th>SHA-256 (앞 24자리)</th><th>판정</th></tr></thead>
+        <tbody><tr><td colspan="4" class="empty">확인 중…</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ── 6. 확인 방법 ──────────────────────────── -->
+  <section class="section" id="howto">
+    <div class="section-head">
+      <span class="eyebrow">06 · 확인 방법</span>
+      <h2>4줄로 확인하기</h2>
+    </div>
+    <div class="card pad">
+      <div class="checklist">
+        <div class="check-row"><span class="k">어디로</span><span>이 페이지 하나. 새 시크릿 창에서 로그인 없이 열립니다.</span></div>
+        <div class="check-row"><span class="k">무엇을</span><span>① <b>지금 다시 조회</b>를 누릅니다. ② 04번 칸에서 <b>느린 응답</b>을 누릅니다. ③ 이어서 <b>다시 시도 → 회복</b>을 누릅니다.</span></div>
+        <div class="check-row"><span class="k">통과</span><span>①에서 값·단위·출처·출처 시각·조회 시각·<code>Asia/Seoul</code>이 함께 보이고 02번 대조표가 전부 <span class="match">일치</span>. ②에서 <code>stale / timeout</code>과 함께 마지막 정상값 105가 <b>오래된 값</b> 표시로 남고 행은 1건. ③ 뒤 <code>fresh / none</code>, 행 2건, 새 합성 날짜 <code>2026-08-25</code> 행이 정확히 1건, 값 120, 변화 +15.</span></div>
+        <div class="check-row"><span class="k">안 될 때</span><span>지금 값 자리에 큰 숫자 대신 마지막 정상값과 노란 안내 상자가 뜨고, 실패 종류마다 다른 문장과 다른 다음 행동이 적힙니다. 03번의 보존된 기록은 실패해도 줄어들지 않습니다.</span></div>
+      </div>
+    </div>
+    <div class="card pad">
+      <p style="margin:0 0 8px"><strong style="font-size:14px">이 화면이 지키는 규칙</strong></p>
+      <ul style="margin:0;padding-left:18px;color:var(--ink-2);font-size:13.5px">
+        <li>실패했을 때 값을 지어내지 않습니다. 마지막 정상값을 그대로 두고 언제 것인지 밝힙니다.</li>
+        <li>보존된 일별 기록은 실제 조회로만 늘어납니다. 합성 재생은 04번 칸 안에서만 살고, 새로고침하면 사라집니다.</li>
+        <li>개인정보는 다루지 않습니다. 좌표는 서울시청(37.5665, 126.9780)이며 방문자 정보를 저장하지 않습니다.</li>
+        <li>비밀키가 필요 없는 공개 API만 호출합니다. 저장소·배포 파일·네트워크 응답에 감출 값이 없습니다.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    출처 · <a id="foot-source" href="https://open-meteo.com/" target="_blank" rel="noreferrer noopener">Open-Meteo 공개 기상 API</a> ·
+    합성 fixture 꾸러미 <code>aleph-t04-real-information-board-public-contract-v2</code> ·
+    기준 시간대 <code>Asia/Seoul</code>
+  </footer>
+</main>
+
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>

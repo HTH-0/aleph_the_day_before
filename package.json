@@ -1,0 +1,14 @@
+{
+  "name": "t04-real-information-board",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "T04 오늘의 진짜 정보판 — 실제 공개 원천 1건 + 결정론 장애 재생",
+  "scripts": {
+    "record": "node scripts/record-daily.js",
+    "verify:assets": "node scripts/verify-assets.js",
+    "verify:replay": "node scripts/selfcheck.js",
+    "verify": "npm run verify:assets && npm run verify:replay",
+    "serve": "node scripts/serve.js"
+  }
+}
