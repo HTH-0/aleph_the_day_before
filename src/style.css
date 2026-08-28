@@ -1,5 +1,5 @@
 :root {
-  --bg: #f6f5fa;
+  --bg: #f8f7fc;
   --surface: #ffffff;
   --line: #e2e6f0;
   --line-soft: #ecefF7;
@@ -7,20 +7,23 @@
   --ink-2: #454c60;
   --muted: #7d8499;
   --muted-2: #838ba1;
-  --accent: #5b52dd;
-  --accent-ink: #453cc4;
-  --accent-soft: #efedfc;
-  --accent-glow: rgba(91, 82, 221, 0.14);
-  --teal: #0e9488;
-  --teal-ink: #0b756b;
-  --teal-soft: #e2f6f3;
-  --up: #0ea86c;
-  --up-soft: #e3f9ee;
-  --down: #e5484d;
-  --down-soft: #fdecec;
-  --warn: #b8860b;
-  --warn-bg: #fdf7e6;
-  --warn-line: #eed187;
+  --accent: #7069e8;
+  --accent-ink: #5a52d6;
+  --accent-soft: #f0efff;
+  --accent-glow: rgba(112, 105, 232, 0.14);
+  --teal: #22b8a6;
+  --teal-ink: #0c7a6d;
+  --teal-soft: #e3f9f6;
+  --up: #1cbf7e;
+  --up-ink: #0c8054;
+  --up-soft: #e6faf0;
+  --down: #f0656d;
+  --down-ink: #d43e48;
+  --down-soft: #fdedee;
+  --warn: #d99a2b;
+  --warn-ink: #9c6b09;
+  --warn-bg: #fff8e8;
+  --warn-line: #f4dfa0;
   --label: 'Inter', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', system-ui, sans-serif;
   --sans: Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', system-ui, sans-serif;
   --display: 'Manrope', var(--sans);
@@ -76,7 +79,7 @@ a:hover { text-decoration: underline; }
 }
 .eyebrow b { color: var(--accent-ink); font-weight: 800; }
 
-.figure { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.figure { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding-right: 24px; }
 
 .side {
   display: flex;
@@ -116,8 +119,8 @@ a:hover { text-decoration: underline; }
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.figure .delta.up { color: var(--up); }
-.figure .delta.down { color: var(--down); }
+.figure .delta.up { color: var(--up-ink); }
+.figure .delta.down { color: var(--down-ink); }
 .figure .delta.flat { color: var(--muted-2); }
 .figure .delta.none { color: var(--muted-2); font-size: 15px; font-weight: 500; }
 .caret { font-size: 0.7em; }
@@ -133,8 +136,8 @@ a:hover { text-decoration: underline; }
   letter-spacing: -0.005em;
 }
 .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
-.pill.fresh { color: var(--up); background: var(--up-soft); }
-.pill.stale { color: var(--warn); background: var(--warn-bg); }
+.pill.fresh { color: var(--up-ink); background: var(--up-soft); }
+.pill.stale { color: var(--warn-ink); background: var(--warn-bg); }
 
 .meta {
   margin: 0;
@@ -191,7 +194,11 @@ details.detail[open] > summary .arrow { transform: rotate(180deg); }
   border-radius: 10px;
   overflow: hidden;
 }
-.stat-cell { background: var(--surface); padding: 24px 24px; }
+.stat-cell { background: var(--surface); padding: 22px 24px; text-align: right; }
+.stat-cell.accent { background: var(--accent-soft); }
+.stat-cell.up { background: var(--up-soft); }
+.stat-cell.down { background: var(--down-soft); }
+.stat-cell.teal { background: var(--teal-soft); }
 .stat-cell dt {
   font-family: var(--label);
   font-size: 13px;
@@ -208,8 +215,8 @@ details.detail[open] > summary .arrow { transform: rotate(180deg); }
 }
 .stat-cell dd small { display: block; font-size: 11px; font-weight: 600; color: var(--muted-2); margin-top: 4px; letter-spacing: 0; }
 .stat-cell.accent dd { color: var(--accent-ink); }
-.stat-cell.up dd { color: var(--up); }
-.stat-cell.down dd { color: var(--down); }
+.stat-cell.up dd { color: var(--up-ink); }
+.stat-cell.down dd { color: var(--down-ink); }
 .stat-cell.teal dd { color: var(--teal-ink); }
 
 /* ── 차트 ────────────────────────────────────────── */
@@ -253,8 +260,8 @@ thead th {
 tbody tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.big { font-size: 18px; font-weight: 800; }
-td.up { color: var(--up); font-weight: 700; }
-td.down { color: var(--down); font-weight: 700; }
+td.up { color: var(--up-ink); font-weight: 700; }
+td.down { color: var(--down-ink); font-weight: 700; }
 .empty { padding: 44px 0; color: var(--muted-2); font-size: 13.5px; font-weight: 600; white-space: normal; text-align: center; }
 
 /* ── 실패 ────────────────────────────────────────── */
@@ -357,8 +364,9 @@ footer {
 
 @media (max-width: 760px) {
   .wrap { padding: 0 18px; }
-  .figure { flex-direction: column; align-items: flex-start; }
+  .figure { flex-direction: column; align-items: flex-start; padding-right: 0; }
   .side { width: 100%; margin-left: 0; padding-bottom: 0; }
+  .stat-cell { text-align: left; }
   .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-body { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .detail-body dt { margin-top: 8px; }

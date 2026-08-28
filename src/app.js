@@ -194,8 +194,8 @@ function renderChart(rows) {
   const defs = svg('defs');
   const grad = svg('linearGradient', { id: 'areaFill', x1: 0, y1: 0, x2: 0, y2: 1 });
   grad.append(
-    svg('stop', { offset: '0%', 'stop-color': '#5b52dd', 'stop-opacity': 0.28 }),
-    svg('stop', { offset: '100%', 'stop-color': '#5b52dd', 'stop-opacity': 0 })
+    svg('stop', { offset: '0%', 'stop-color': '#7069e8', 'stop-opacity': 0.26 }),
+    svg('stop', { offset: '100%', 'stop-color': '#7069e8', 'stop-opacity': 0 })
   );
   defs.append(grad);
   node.append(defs);
