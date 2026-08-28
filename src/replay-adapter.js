@@ -1,84 +1,91 @@
-// replay-adapter.js — 공개 합성 fixture 9종 재생
-//
-// 여기서 만들어지는 값은 전부 vendor/aleph-t04/fixtures 의 합성 시험값입니다.
-// 실제 조회 결과와 섞이지 않도록 별도 상태에서만 돌아갑니다.
+// 공개 결정론 fixture 재생.
+// 여기서 쓰는 값은 전부 합성 시험값이다. 실제 사람이나 실제 관측이 아니다.
+// live adapter와 같은 core 함수(applySuccessfulReading / applyError)만 호출한다.
 
-import { classifyTransport } from './core.js';
+import { applyError, applySuccessfulReading, classifyTransport } from './core.js';
 
-export const FIXTURE_DIR = 'vendor/aleph-t04/fixtures';
+export const FIXTURE_FILES = Object.freeze([
+  { id: 'T04-NORMAL-D1-A', file: 'normal-d1-a.json' },
+  { id: 'T04-NORMAL-D1-B', file: 'normal-d1-b.json' },
+  { id: 'T04-NORMAL-D2', file: 'normal-d2.json' },
+  { id: 'T04-TIMEOUT', file: 'timeout.json' },
+  { id: 'T04-AUTH-401', file: 'auth-401.json' },
+  { id: 'T04-RATE-429', file: 'rate-429.json' },
+  { id: 'T04-OFFLINE', file: 'offline.json' },
+  { id: 'T04-SCHEMA-BREAK', file: 'schema-break.json' },
+  { id: 'T04-RECOVER-D2', file: 'recover-d2.json' }
+]);
 
-export const FIXTURE_FILES = Object.freeze({
-  'T04-NORMAL-D1-A': 'normal-d1-a.json',
-  'T04-NORMAL-D1-B': 'normal-d1-b.json',
-  'T04-NORMAL-D2': 'normal-d2.json',
-  'T04-TIMEOUT': 'timeout.json',
-  'T04-AUTH-401': 'auth-401.json',
-  'T04-RATE-429': 'rate-429.json',
-  'T04-OFFLINE': 'offline.json',
-  'T04-SCHEMA-BREAK': 'schema-break.json',
-  'T04-RECOVER-D2': 'recover-d2.json'
+export const SEQUENCES = Object.freeze({
+  normal: {
+    title: '정상 · 일별 저장',
+    ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-NORMAL-D2']
+  },
+  timeout: { title: '느린 응답', ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-TIMEOUT'] },
+  auth: { title: '401 거절', ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-AUTH-401'] },
+  rate: { title: '호출 제한', ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-RATE-429'] },
+  offline: { title: '오프라인', ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-OFFLINE'] },
+  schema: { title: '형식 변경', ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-SCHEMA-BREAK'] },
+  recover: {
+    title: '오류 뒤 회복',
+    ids: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-TIMEOUT', 'T04-RECOVER-D2']
+  }
 });
 
-export const FAILURE_FIXTURES = Object.freeze([
-  'T04-TIMEOUT',
-  'T04-AUTH-401',
-  'T04-RATE-429',
-  'T04-OFFLINE',
-  'T04-SCHEMA-BREAK'
-]);
+export const BASE_PATH = './vendor/aleph-t04/';
 
-/** README 의 재생 순서 7가지 */
-export const REPLAY_SEQUENCES = Object.freeze([
-  { id: 'daily-save', title: '정상 · 일별 저장', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-NORMAL-D2'] },
-  { id: 'fail-timeout', title: '실패 · 느린 응답', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-TIMEOUT'] },
-  { id: 'fail-auth', title: '실패 · 401 거절', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-AUTH-401'] },
-  { id: 'fail-rate', title: '실패 · 호출 제한', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-RATE-429'] },
-  { id: 'fail-offline', title: '실패 · 오프라인', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-OFFLINE'] },
-  { id: 'fail-schema', title: '실패 · 형식 변경', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-SCHEMA-BREAK'] },
-  { id: 'recover', title: '오류 뒤 회복', steps: ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-TIMEOUT', 'T04-RECOVER-D2'] }
-]);
-
-/** fixture 한 건을 outcome 으로 바꿉니다. 상태를 직접 바꾸지 않습니다. */
-export function fixtureToOutcome(fixture) {
-  const meta = {
-    fixture_id: fixture.fixture_id,
-    virtual_now: fixture.virtual_now,
-    attempted_at: fixture.virtual_now,
-    retry_after_seconds: fixture.transport.headers['retry-after']
-      ? Number(fixture.transport.headers['retry-after'])
-      : null,
-    synthetic: true,
-    observation: {
-      target_date: null,
-      source_url: fixture.payload && fixture.payload.source_url ? fixture.payload.source_url : null,
-      attempted_at: fixture.virtual_now,
-      deadline_ms: fixture.transport.deadline_ms,
-      http_status: fixture.transport.status,
-      elapsed_ms: fixture.transport.delay_ms,
-      retry_after_seconds: fixture.transport.headers['retry-after']
-        ? Number(fixture.transport.headers['retry-after'])
-        : null,
-      raw_excerpt: fixture.payload ? JSON.stringify(fixture.payload) : null
-    }
-  };
-
-  const failure = classifyTransport({
-    mode: fixture.transport.mode,
-    status: fixture.transport.status,
-    headers: fixture.transport.headers
-  });
-
-  if (failure) {
-    return { kind: 'error', code: failure, meta };
-  }
-  return { kind: 'success', reading: fixture.payload, meta, raw: fixture.payload };
+export async function loadFixtures(fetchImpl = fetch, basePath = BASE_PATH) {
+  const entries = await Promise.all(
+    FIXTURE_FILES.map(async ({ id, file }) => {
+      const response = await fetchImpl(`${basePath}fixtures/${file}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`fixture ${file}를 읽지 못했습니다 (HTTP ${response.status})`);
+      const fixture = await response.json();
+      if (fixture.fixture_id !== id) throw new Error(`fixture_id 불일치: ${file}`);
+      return [id, fixture];
+    })
+  );
+  return Object.fromEntries(entries);
 }
 
-/** 브라우저용 로더 */
-export async function loadFixtureInBrowser(fixtureId, baseUrl = '') {
-  const file = FIXTURE_FILES[fixtureId];
-  if (!file) throw new Error(`알 수 없는 fixture: ${fixtureId}`);
-  const response = await fetch(`${baseUrl}${FIXTURE_DIR}/${file}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`fixture 를 읽지 못했습니다: ${file}`);
-  return response.json();
+/** fixture 한 건을 core로 흘려보낸다. 상태 전이 규칙은 live와 동일하다. */
+export function runFixture(state, fixture) {
+  const retryAfter = fixture.transport.headers && fixture.transport.headers['retry-after']
+    ? Number(fixture.transport.headers['retry-after'])
+    : null;
+  const meta = {
+    fixture_id: fixture.fixture_id,
+    origin: 'replay',
+    virtual_now: fixture.virtual_now,
+    retry_after_seconds: retryAfter
+  };
+
+  const transportError = classifyTransport(fixture.transport);
+  if (transportError) {
+    return applyError(state, transportError, {
+      ...meta,
+      message: describeTransport(fixture)
+    });
+  }
+  try {
+    return applySuccessfulReading(state, fixture.payload, {
+      ...meta,
+      raw_excerpt: { note: '합성 fixture payload', fixture_id: fixture.fixture_id }
+    });
+  } catch (error) {
+    return applyError(state, 'schema_error', { ...meta, message: error.message });
+  }
+}
+
+function describeTransport(fixture) {
+  const t = fixture.transport;
+  if (t.mode === 'timeout') return `합성 응답 ${t.delay_ms}ms > 마감 ${t.deadline_ms}ms`;
+  if (t.mode === 'offline') return '합성 네트워크 단절';
+  return `합성 HTTP ${t.status}`;
+}
+
+/** 재생 시 실제로 기다리는 시간. 합성 지연을 짧게 흉내만 낸다. */
+export function replayDelayMs(fixture) {
+  const t = fixture.transport;
+  if (t.mode === 'timeout') return 900;
+  return Math.min(t.delay_ms, 200);
 }
