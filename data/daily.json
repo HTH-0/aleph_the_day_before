@@ -2,6 +2,35 @@
   "schema_version": "t04-daily-store-v1",
   "signal_id": "seoul-temperature-2m",
   "record_timezone": "Asia/Seoul",
-  "generated_at": null,
-  "rows": []
+  "generated_at": "2026-08-28T00:12:58.020Z",
+  "rows": [
+    {
+      "record_id": "seoul-temperature-2m:2026-08-28",
+      "signal_id": "seoul-temperature-2m",
+      "record_date": "2026-08-28",
+      "normalized_value": 25.2,
+      "unit": "°C",
+      "first_fetched_at": "2026-08-28T00:12:57.408Z",
+      "last_fetched_at": "2026-08-28T00:12:57.408Z",
+      "update_count": 1,
+      "reading": {
+        "signal_id": "seoul-temperature-2m",
+        "normalized_value": 25.2,
+        "unit": "°C",
+        "source_name": "Open-Meteo 공개 기상 API",
+        "source_url": "https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m&timezone=Asia%2FSeoul",
+        "source_time": "2026-08-28T00:00:00.000Z",
+        "fetched_at": "2026-08-28T00:12:57.408Z",
+        "record_timezone": "Asia/Seoul",
+        "record_date": "2026-08-28"
+      },
+      "raw_excerpt": {
+        "current.temperature_2m": 25.2,
+        "current_units.temperature_2m": "°C",
+        "current.time": "2026-08-28T09:00",
+        "utc_offset_seconds": 32400,
+        "timezone": "Asia/Seoul"
+      }
+    }
+  ]
 }
