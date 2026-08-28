@@ -74,3 +74,29 @@ export function recomputeDelta(rows) {
     expression: `${current.normalized_value} − ${previous.normalized_value} = ${signed}`
   };
 }
+
+/** 특정 record_date 행에 6시간 구간 분포를 붙입니다. 값(normalized_value)은 건드리지 않습니다. */
+export function attachBreakdown(store, recordDate, breakdown) {
+  const next = JSON.parse(JSON.stringify(store));
+  const row = next.daily_readings.find((r) => r.record_date === recordDate);
+  if (!row) return next;
+  row.breakdown = breakdown;
+  return next;
+}
+
+/** 구간 합계와 하루 합계를 대조합니다. 어긋나면 숨기지 않고 차이를 그대로 돌려줍니다. */
+export function reconcileBreakdown(row) {
+  if (!row || !row.breakdown) return { state: 'none' };
+  const breakdown = row.breakdown;
+  if (!breakdown.complete || typeof breakdown.sum !== 'number') {
+    const missing = (breakdown.segments || []).filter((s) => typeof s.value !== 'number');
+    return { state: 'incomplete', missing };
+  }
+  const diff = breakdown.sum - row.normalized_value;
+  return {
+    state: diff === 0 ? 'match' : 'drift',
+    sum: breakdown.sum,
+    total: row.normalized_value,
+    diff
+  };
+}

@@ -463,7 +463,70 @@ table.grid td.label { font-family: var(--sans); color: var(--ink-2); white-space
 
 .recalc__note { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
 
-/* ---------- 04 장애 재생 ---------- */
+/* ---------- 02 시간대 분포 ---------- */
+
+.bars { display: flex; flex-direction: column; gap: 10px; }
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 74px 1fr 108px;
+  align-items: center;
+  gap: 12px;
+}
+
+.bar-row__label {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-row__track {
+  height: 26px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.bar-row__fill {
+  height: 100%;
+  background: var(--accent-soft);
+  border-right: 2px solid var(--accent);
+  min-width: 2px;
+}
+
+.bar-row__fill--peak { background: #dfe2ff; }
+.bar-row__fill--none { background: var(--warn-bg); border-right-color: var(--warn-line); }
+
+.bar-row__value {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.bar-row__share { color: var(--ink-3); font-size: 11.5px; }
+.bar-row__value--none { color: var(--warn); }
+
+.bars-caption {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.peak-note {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+}
+.peak-note strong { font-family: var(--mono); }
+
+@media (max-width: 620px) {
+  .bar-row { grid-template-columns: 62px 1fr; }
+  .bar-row__value { grid-column: 2; text-align: left; }
+}
+
+/* ---------- 05 장애 재생 ---------- */
 
 .fixture-groups { display: flex; flex-direction: column; gap: 14px; }
 

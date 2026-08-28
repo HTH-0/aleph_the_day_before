@@ -7,6 +7,8 @@ import { dirname, join } from 'node:path';
 
 import { applyOutcome, resetEvaluationState, ERROR_PRESENTATION } from '../src/core.js';
 import { FIXTURE_FILES, REPLAY_SEQUENCES, FAILURE_FIXTURES, fixtureToOutcome } from '../src/replay-adapter.js';
+import { reconcileBreakdown } from '../src/store.js';
+import { SEGMENTS, buildRangeUrl } from '../src/live-adapter.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtureDir = join(here, '..', 'vendor', 'aleph-t04', 'fixtures');
@@ -146,6 +148,49 @@ async function main() {
         state.last_delta === 15,
       `${state.status.freshness}/${state.status.error_code} · 행 ${state.daily_readings.length} · 신규 ${added.length}건(${added[0]?.record_date}) · 값 ${state.current_reading.normalized_value} · 변화 +${state.last_delta}`
     );
+  }
+
+  console.log('\n6시간 구간 분포');
+  {
+    report('구간 정의가 하루를 빈틈없이 덮는지', SEGMENTS.length === 4 &&
+      SEGMENTS[0].from === '00:00:00' && SEGMENTS[3].to === '23:59:59' &&
+      SEGMENTS.every((seg, i) => i === 0 || Number(seg.from.slice(0, 2)) === Number(SEGMENTS[i - 1].to.slice(0, 2)) + 1),
+      SEGMENTS.map((s) => s.label).join(' · '));
+
+    report('구간 주소에 +09:00 오프셋이 들어가는지',
+      SEGMENTS.every((seg) => buildRangeUrl('2026-08-27', seg.from, seg.to).includes('%2B09%3A00')),
+      '%2B09%3A00 인코딩 확인');
+
+    const row = {
+      normalized_value: 100,
+      unit: '개',
+      breakdown: {
+        target_date: '2026-08-27',
+        complete: true,
+        sum: 100,
+        segments: SEGMENTS.map((seg, i) => ({ label: seg.label, value: [20, 30, 30, 20][i] }))
+      }
+    };
+    report('구간 합계 = 하루 합계이면 match', reconcileBreakdown(row).state === 'match', '20+30+30+20 = 100');
+
+    const drift = JSON.parse(JSON.stringify(row));
+    drift.breakdown.sum = 103;
+    const d = reconcileBreakdown(drift);
+    report('어긋나면 숨기지 않고 drift 로 보고', d.state === 'drift' && d.diff === 3, `차이 ${d.diff}`);
+
+    const partial = JSON.parse(JSON.stringify(row));
+    partial.breakdown.complete = false;
+    partial.breakdown.sum = null;
+    partial.breakdown.segments[1].value = null;
+    report('구간이 빠지면 추정하지 않고 incomplete', reconcileBreakdown(partial).state === 'incomplete');
+  }
+
+  console.log('\n분포가 저장 규칙을 바꾸지 않는지');
+  {
+    const { state } = await runSequence(['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-NORMAL-D2']);
+    report('구간 기능 추가 뒤에도 일별 행은 하루 1건',
+      state.daily_readings.length === 2 && state.daily_readings.every((r) => r.breakdown === null),
+      `행 ${state.daily_readings.length}건 · fixture 재생에는 구간 없음`);
   }
 
   console.log(`\n합계: 통과 ${pass} · 실패 ${fail}`);

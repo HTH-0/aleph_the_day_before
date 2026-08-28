@@ -208,7 +208,10 @@ export function applySuccessfulReading(inputState, reading, runMeta = {}) {
     last_fetched_at: reading.fetched_at,
     update_count: existing ? (existing.update_count || 1) + 1 : 1,
     reading: clone(reading),
-    observation: runMeta.observation ? clone(runMeta.observation) : null
+    observation: runMeta.observation ? clone(runMeta.observation) : null,
+    // 하루 안의 6시간 구간 분포. 저장되는 값을 만들지 않는 딸린 정보이며,
+    // 같은 날 재조회에서도 이미 얻은 분포를 잃지 않도록 이어받습니다.
+    breakdown: runMeta.breakdown ? clone(runMeta.breakdown) : existing ? existing.breakdown || null : null
   };
 
   if (existingIndex >= 0) state.daily_readings[existingIndex] = row;

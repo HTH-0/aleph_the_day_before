@@ -12,7 +12,7 @@ import {
 } from './core.js';
 
 import { SIGNAL, fetchLiveOutcome } from './live-adapter.js';
-import { emptyStore, storeToState, recomputeDelta } from './store.js';
+import { emptyStore, storeToState, recomputeDelta, reconcileBreakdown } from './store.js';
 import {
   FIXTURE_FILES,
   FAILURE_FIXTURES,
@@ -156,7 +156,102 @@ function renderNow() {
   $('now-status-note').textContent = status ? `${status.freshness} / ${status.error_code}` : '대기';
 }
 
-/* ---------------- 02 대조표 ---------------- */
+/* ---------------- 02 시간대 분포 ---------------- */
+
+function renderHours() {
+  const rows = app.liveState.daily_readings.filter((r) => r.breakdown && Array.isArray(r.breakdown.segments));
+  const chart = $('hours-chart');
+  const empty = $('hours-empty');
+  const reconcile = $('hours-reconcile');
+  const tableWrap = $('hours-table-wrap');
+
+  if (!rows.length) {
+    chart.innerHTML = '';
+    empty.hidden = false;
+    reconcile.hidden = true;
+    tableWrap.hidden = true;
+    $('hours-note').textContent = '0건';
+    return;
+  }
+  empty.hidden = true;
+
+  const latest = rows[rows.length - 1];
+  const segments = latest.breakdown.segments;
+  const values = segments.filter((seg) => typeof seg.value === 'number').map((seg) => seg.value);
+  const max = values.length ? Math.max(...values) : 0;
+  const total = values.reduce((a, b) => a + b, 0);
+  const peak = segments.find((seg) => seg.value === max && max > 0);
+
+  chart.innerHTML =
+    (peak
+      ? `<p class="peak-note">${escapeHtml(latest.breakdown.target_date)} 에는 <strong>${escapeHtml(
+          peak.label
+        )} (KST)</strong> 구간에 가장 많이 생겼습니다.</p>`
+      : '') +
+    '<div class="bars">' +
+    segments
+      .map((seg) => {
+        const has = typeof seg.value === 'number';
+        const width = has && max > 0 ? Math.max(2, Math.round((seg.value / max) * 100)) : 100;
+        const share = has && total > 0 ? `${((seg.value / total) * 100).toFixed(1)}%` : '—';
+        const fillClass = !has ? 'bar-row__fill--none' : seg.value === max ? 'bar-row__fill--peak' : '';
+        return `<div class="bar-row">
+          <div class="bar-row__label">${escapeHtml(seg.label)}</div>
+          <div class="bar-row__track"><div class="bar-row__fill ${fillClass}" style="width:${width}%"></div></div>
+          <div class="bar-row__value${has ? '' : ' bar-row__value--none'}">${
+            has ? `${formatNumber(seg.value)} <span class="bar-row__share">${share}</span>` : `실패 · ${escapeHtml(seg.error_code)}`
+          }</div>
+        </div>`;
+      })
+      .join('') +
+    '</div>' +
+    `<p class="bars-caption">구간은 대상 날짜 ${escapeHtml(
+      latest.breakdown.target_date
+    )} 의 Asia/Seoul 시각으로 나눕니다. 각 구간은 하루 합계와 같은 검색 조건에 시각 범위만 좁힌 별도 조회입니다.</p>`;
+
+  // 합계 대조
+  const check = reconcileBreakdown(latest);
+  reconcile.hidden = false;
+  if (check.state === 'match') {
+    $('hours-reconcile-expr').textContent = `${formatNumber(check.sum)} = ${formatNumber(check.total)} ${latest.unit}`;
+    $('hours-reconcile-note').textContent =
+      '네 구간의 합이 하루 합계와 같습니다. 화면에 쓰는 값은 언제나 하루 전체 조회 한 건이고, 구간은 그 숫자의 구성만 보여 줍니다.';
+  } else if (check.state === 'drift') {
+    $('hours-reconcile-expr').textContent = `${formatNumber(check.sum)} ≠ ${formatNumber(check.total)} ${
+      latest.unit
+    } (차이 ${formatSigned(check.diff)})`;
+    $('hours-reconcile-note').textContent =
+      '구간 합계가 하루 합계와 어긋납니다. 검색 인덱스가 조회 사이에 갱신되면 생길 수 있는 차이입니다. 어느 쪽도 고치지 않고 그대로 보여 줍니다. 저장되는 값은 하루 합계 쪽입니다.';
+  } else {
+    $('hours-reconcile-expr').textContent = '대조하지 않습니다';
+    $('hours-reconcile-note').textContent = `구간 ${
+      check.missing ? check.missing.length : 0
+    }개를 얻지 못했습니다. 빠진 구간을 추정해 채우지 않습니다.`;
+  }
+
+  // 날짜별 표
+  if (rows.length > 1) {
+    tableWrap.hidden = false;
+    $('hours-table-body').innerHTML = rows
+      .map((row) => {
+        const cells = row.breakdown.segments
+          .map((seg) => `<td>${typeof seg.value === 'number' ? formatNumber(seg.value) : '—'}</td>`)
+          .join('');
+        return `<tr><td>${escapeHtml(row.record_date)}</td><td>${escapeHtml(
+          row.breakdown.target_date
+        )}</td>${cells}<td>${
+          typeof row.breakdown.sum === 'number' ? formatNumber(row.breakdown.sum) : '—'
+        }</td></tr>`;
+      })
+      .join('');
+  } else {
+    tableWrap.hidden = true;
+  }
+
+  $('hours-note').textContent = `${rows.length}일치 · 6시간 구간`;
+}
+
+/* ---------------- 03 대조표 ---------------- */
 
 function verdict(ok) {
   return ok
@@ -281,7 +376,7 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-/* ---------------- 03 보존 기록 ---------------- */
+/* ---------------- 04 보존 기록 ---------------- */
 
 function renderHistory() {
   const rows = app.liveState.daily_readings;
@@ -373,6 +468,7 @@ async function runLiveFetch() {
       };
     }
     renderNow();
+    renderHours();
     renderCompare();
     renderHistory();
     renderQuota();
@@ -382,7 +478,7 @@ async function runLiveFetch() {
   }
 }
 
-/* ---------------- 04 장애 재생 ---------------- */
+/* ---------------- 05 장애 재생 ---------------- */
 
 async function getFixture(fixtureId) {
   if (app.fixtureCache.has(fixtureId)) return app.fixtureCache.get(fixtureId);
@@ -506,7 +602,7 @@ function renderReplay() {
     .join('');
 }
 
-/* ---------------- 05 자가검증 ---------------- */
+/* ---------------- 06 자가검증 ---------------- */
 
 async function sha256Hex(buffer) {
   const digest = await crypto.subtle.digest('SHA-256', buffer);
@@ -648,6 +744,7 @@ async function boot() {
   }
 
   renderNow();
+  renderHours();
   renderHistory();
   renderCompare();
   buildChips();

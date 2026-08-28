@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { applyOutcome, kstStamp } from '../src/core.js';
-import { SIGNAL, fetchLiveOutcome } from '../src/live-adapter.js';
-import { emptyStore, storeToState, stateToStore, recomputeDelta } from '../src/store.js';
+import { SIGNAL, fetchLiveOutcome, fetchBreakdown } from '../src/live-adapter.js';
+import { emptyStore, storeToState, stateToStore, recomputeDelta, attachBreakdown, reconcileBreakdown } from '../src/store.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const storePath = join(here, '..', 'data', 'daily.json');
@@ -46,13 +46,28 @@ async function main() {
   const reading = nextState.current_reading;
   const after = nextState.daily_readings.length;
 
-  const nextStore = stateToStore(nextState, SIGNAL.id, reading.fetched_at);
+  let nextStore = stateToStore(nextState, SIGNAL.id, reading.fetched_at);
+
+  // 6시간 구간 분포는 딸린 정보입니다. 실패해도 하루 합계 기록은 그대로 남깁니다.
+  console.log('[구간] 6시간 구간 4개를 이어서 조회합니다.');
+  const breakdown = await fetchBreakdown(observation.target_date);
+  for (const segment of breakdown.segments) {
+    console.log(`        ${segment.label}  ${segment.value ?? `실패(${segment.error_code})`}`);
+  }
+  nextStore = attachBreakdown(nextStore, reading.record_date, breakdown);
+
   await writeFile(storePath, `${JSON.stringify(nextStore, null, 2)}\n`, 'utf8');
 
   console.log(`[성공] ${reading.normalized_value} ${reading.unit}`);
   console.log(`[대상] ${reading.source_time}`);
   console.log(`[조회] ${kstStamp(reading.fetched_at)}`);
   console.log(`[기록] record_date ${reading.record_date} · 행 ${before} → ${after}`);
+
+  const row = nextStore.daily_readings.find((r) => r.record_date === reading.record_date);
+  const check = reconcileBreakdown(row);
+  if (check.state === 'match') console.log(`[대조] 구간 합계 ${check.sum} = 하루 합계 ${check.total}`);
+  else if (check.state === 'drift') console.log(`[대조] 구간 합계 ${check.sum} ≠ 하루 합계 ${check.total} (차이 ${check.diff})`);
+  else if (check.state === 'incomplete') console.log(`[대조] 구간 ${check.missing.length}개를 얻지 못해 합계를 대조하지 않습니다.`);
 
   const delta = recomputeDelta(nextStore.daily_readings);
   console.log(`[변화] ${delta.state === 'comparable' ? delta.expression : delta.reason}`);
