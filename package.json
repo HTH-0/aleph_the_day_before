@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "T04 오늘의 진짜 정보판 — 실제 공개 원천 1건 + 결정론 장애 재생",
+  "description": "어제 하루 동안 새로 생긴 공개 GitHub 저장소 수를 매일 기록하는 정보판",
   "scripts": {
+    "serve": "node scripts/serve.js",
     "record": "node scripts/record-daily.js",
-    "verify:assets": "node scripts/verify-assets.js",
-    "verify:replay": "node scripts/selfcheck.js",
-    "verify": "npm run verify:assets && npm run verify:replay",
-    "serve": "node scripts/serve.js"
-  }
+    "selfcheck": "node scripts/selfcheck.js",
+    "verify-assets": "node scripts/verify-assets.js",
+    "scan-secrets": "node scripts/scan-secrets.js",
+    "check": "node scripts/verify-assets.js && node scripts/selfcheck.js && node scripts/scan-secrets.js"
+  },
+  "engines": { "node": ">=20" }
 }

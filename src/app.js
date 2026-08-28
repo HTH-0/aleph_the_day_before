@@ -1,537 +1,668 @@
+// app.js — 화면 로직
+// live 경로와 replay 경로가 모두 core.js 의 applyOutcome 만 통과합니다.
+
 import {
+  applyOutcome,
+  resetEvaluationState,
   ERROR_PRESENTATION,
-  createEmptyState,
-  kstDate,
+  formatNumber,
+  formatSigned,
   kstStamp,
-  lastGoodRow
+  kstDate
 } from './core.js';
-import { SIGNAL, applyLiveResult, fetchLive, rawExcerpt } from './live-adapter.js';
-import { BASE_PATH, FIXTURE_FILES, SEQUENCES, loadFixtures, replayDelayMs, runFixture } from './replay-adapter.js';
-import { emptyStore, recomputeDelta, stateFromStore } from './store.js';
+
+import { SIGNAL, fetchLiveOutcome } from './live-adapter.js';
+import { emptyStore, storeToState, recomputeDelta } from './store.js';
+import {
+  FIXTURE_FILES,
+  FAILURE_FIXTURES,
+  REPLAY_SEQUENCES,
+  fixtureToOutcome,
+  loadFixtureInBrowser
+} from './replay-adapter.js';
 
 const $ = (id) => document.getElementById(id);
-const el = (tag, props = {}, children = []) => {
-  const node = Object.assign(document.createElement(tag), props);
-  for (const child of [].concat(children)) {
-    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
-  }
-  return node;
+const COOLDOWN_MS = 6000;
+
+const app = {
+  store: emptyStore(SIGNAL.id),
+  liveState: resetEvaluationState(),
+  lastSuccess: null, // { raw, reading, observation }
+  lastObservation: null,
+  replayState: resetEvaluationState(),
+  replayLog: [],
+  fixtureCache: new Map(),
+  cooldownUntil: 0,
+  busy: false
 };
-const text = (value) => (value === null || value === undefined || value === '' ? '—' : String(value));
-const numText = (n) => (typeof n === 'number' ? String(n) : '—');
-const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n)}`;
 
-let store = emptyStore(SIGNAL.signal_id);
-let liveResult = null;
-let liveState = createEmptyState();
-let fixtures = null;
-let labState = createEmptyState();
-let labSeq = 0;
-let labBusy = false;
+/* ---------------- 시계 ---------------- */
 
-/* ── 시계 ───────────────────────────────────────────── */
-function tick() {
-  $('clock').textContent = (kstStamp(new Date().toISOString()) || '').replace(/^\d{4}-\d{2}-\d{2} /, '');
+function tickClock() {
+  $('clock').textContent = kstStamp(new Date().toISOString()).replace(' (KST)', '');
 }
-setInterval(tick, 1000);
-tick();
 
-/* ── 1. 지금 값 ─────────────────────────────────────── */
-$('signal-question').textContent = SIGNAL.question;
-$('signal-name').textContent = SIGNAL.title;
-$('foot-source').textContent = SIGNAL.source_name;
-$('foot-source').href = SIGNAL.source_home;
+/* ---------------- 01 지금 값 ---------------- */
 
-function renderLive() {
-  const status = liveState.status;
-  const ok = status && status.freshness === 'fresh';
-  const good = lastGoodRow(liveState) || null;
-  const reading = ok ? liveState.current_reading : good ? good.reading : null;
+function renderNow() {
+  $('signal-question').textContent = SIGNAL.question;
+  $('signal-title').textContent = SIGNAL.title;
+  $('signal-def').textContent = SIGNAL.definition;
 
-  const valueEl = $('live-value');
-  valueEl.classList.toggle('stale', !ok);
-  if (reading) {
-    valueEl.textContent = numText(reading.normalized_value);
-  } else if (status) {
-    valueEl.textContent = '값 없음';
+  const state = app.liveState;
+  const reading = state.current_reading;
+  const status = state.status;
+
+  if (!reading) {
+    $('value-main').textContent = '—';
+    $('value-unit').textContent = '';
+    $('target-line').textContent = '아직 성공한 조회가 없습니다. 아래 버튼으로 조회하세요.';
+    for (const id of ['fact-value', 'fact-unit', 'fact-source', 'fact-source-time', 'fact-fetched-at']) {
+      $(id).textContent = '—';
+    }
+    $('fact-timezone').textContent = 'Asia/Seoul';
   } else {
-    valueEl.replaceChildren(el('span', { className: 'skel' }));
+    $('value-main').textContent = formatNumber(reading.normalized_value);
+    $('value-unit').textContent = reading.unit;
+
+    const targetDate = reading.source_time ? reading.source_time.slice(0, 10) : null;
+    $('target-line').innerHTML = targetDate
+      ? `대상 구간: <strong>${targetDate} 00:00 ~ 23:59 (KST)</strong> 하루 동안 만들어진 저장소를 셉니다.`
+      : '대상 구간 정보가 없습니다.';
+
+    $('fact-value').textContent = formatNumber(reading.normalized_value);
+    $('fact-unit').textContent = reading.unit;
+    const sourceCell = $('fact-source');
+    sourceCell.textContent = '';
+    sourceCell.append(reading.source_name, document.createElement('br'));
+    const link = document.createElement('a');
+    link.setAttribute('href', reading.source_url);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
+    link.textContent = reading.source_url;
+    sourceCell.append(link);
+    $('fact-source-time').textContent = kstStamp(reading.source_time) || '—';
+    $('fact-fetched-at').textContent = kstStamp(reading.fetched_at) || '—';
+    $('fact-timezone').textContent = reading.record_timezone;
   }
-  $('live-unit').textContent = reading ? reading.unit : '';
 
-  // 전일 대비
-  const cmp = liveState.last_comparison;
-  const deltaEl = $('live-delta');
-  deltaEl.className = 'delta none';
-  if (cmp && cmp.state === 'comparable') {
-    deltaEl.className = `delta ${cmp.direction === 'increase' ? 'up' : cmp.direction === 'decrease' ? 'down' : 'flat'}`;
-    deltaEl.textContent = `${signed(cmp.signed)} ${cmp.unit}`;
-    $('live-delta-caption').textContent =
-      `${cmp.previous.record_date} 기록 ${cmp.previous.normalized_value} ${cmp.previous.unit}과 비교해 다시 계산했습니다.`;
-  } else if (cmp && cmp.state === 'unit_mismatch') {
-    deltaEl.textContent = '단위가 달라 비교하지 않음';
-    $('live-delta-caption').textContent = '';
+  // 전일 대비 배지 — 저장된 값에서 다시 계산
+  const cmp = recomputeDelta(state.daily_readings);
+  const badge = $('delta-badge');
+  badge.className = 'delta';
+  if (cmp.state === 'comparable') {
+    badge.textContent = `어제 대비 ${formatSigned(cmp.signed)} ${cmp.unit}`;
+    if (cmp.signed > 0) badge.classList.add('delta--up');
+    else if (cmp.signed < 0) badge.classList.add('delta--down');
   } else {
-    deltaEl.textContent = '비교할 어제 기록 없음';
-    $('live-delta-caption').textContent =
-      store.rows.length ? '' : '보존된 일별 기록이 아직 없습니다. 다른 KST 날짜에 한 건 더 쌓이면 여기에서 변화가 계산됩니다.';
+    badge.textContent = `어제 대비 — (기록 ${state.daily_readings.length}건)`;
   }
 
   // 정직 스트립
-  const honesty = $('honesty');
-  honesty.classList.toggle('is-stale', !ok);
-  $('h-freshness').firstChild.textContent = ok ? '새 값 (fresh)' : '오래된 값 (stale)';
-  $('h-freshness-sub').textContent = ok
-    ? '방금 받은 응답입니다'
-    : status
-      ? `error_code = ${status.error_code}`
-      : '아직 조회하지 않았습니다';
-  $('h-lastgood').firstChild.textContent = good ? `${good.normalized_value} ${good.unit}` : '없음';
-  $('h-lastgood-sub').textContent = good
-    ? `${good.record_date} · ${kstStamp(good.last_fetched_at)}`
-    : '성공한 조회가 아직 없습니다';
-  const run = liveState.last_run;
-  $('h-attempt').firstChild.textContent = run ? (run.outcome === 'success' ? '성공' : '실패') : '—';
-  $('h-attempt-sub').textContent = run
-    ? `${kstStamp(run.attempted_at || run.virtual_now) || '—'}${run.outcome === 'error' ? ` · ${run.error_code}` : ''}`
+  const freshEl = $('honesty-freshness');
+  freshEl.className = 'honesty__value';
+  if (!status) {
+    freshEl.textContent = '아직 없음';
+    freshEl.classList.add('honesty__value--muted');
+  } else if (status.freshness === 'fresh') {
+    freshEl.textContent = state.last_run ? 'fresh — 방금 확인한 값' : 'fresh — 보존된 마지막 정상값';
+    freshEl.classList.add('honesty__value--fresh');
+  } else {
+    freshEl.textContent = 'stale — 오래된 값';
+    freshEl.classList.add('honesty__value--stale');
+  }
+
+  const lastGoodEl = $('honesty-lastgood');
+  lastGoodEl.className = 'honesty__value';
+  if (reading) {
+    lastGoodEl.textContent = kstStamp(reading.fetched_at).replace(' (KST)', '');
+  } else {
+    lastGoodEl.textContent = '—';
+    lastGoodEl.classList.add('honesty__value--muted');
+  }
+
+  const attemptEl = $('honesty-attempt');
+  attemptEl.className = 'honesty__value';
+  const run = state.last_run;
+  if (!run) {
+    attemptEl.textContent = '아직 조회하지 않음';
+    attemptEl.classList.add('honesty__value--muted');
+  } else if (run.outcome === 'success') {
+    attemptEl.textContent = '성공 · none';
+    attemptEl.classList.add('honesty__value--fresh');
+  } else {
+    attemptEl.textContent = `실패 · ${run.error_code}`;
+    attemptEl.classList.add('honesty__value--stale');
+  }
+
+  // 실패 안내 상자
+  const alertBox = $('live-alert');
+  if (status && status.freshness === 'stale') {
+    const info = ERROR_PRESENTATION[status.error_code];
+    $('live-alert-code').textContent = `${info.label} · ${info.code}`;
+    $('live-alert-headline').textContent = info.headline;
+    let detail = info.detail;
+    if (run && run.detail) detail += ` (관측: ${run.detail})`;
+    $('live-alert-detail').textContent = detail;
+    let next = info.next_action;
+    if (run && run.retry_after_seconds) next += ` 출처가 알려 준 대기 시간은 ${run.retry_after_seconds}초입니다.`;
+    $('live-alert-next').textContent = next;
+    $('btn-retry').textContent = info.retry_label;
+    alertBox.hidden = false;
+  } else {
+    alertBox.hidden = true;
+  }
+
+  $('now-status-note').textContent = status ? `${status.freshness} / ${status.error_code}` : '대기';
+}
+
+/* ---------------- 02 대조표 ---------------- */
+
+function verdict(ok) {
+  return ok
+    ? '<span class="verdict verdict--ok">일치</span>'
+    : '<span class="verdict verdict--no">불일치</span>';
+}
+
+function renderCompare() {
+  const body = $('compare-body');
+  const success = app.lastSuccess;
+
+  if (!success) {
+    body.innerHTML = '<tr><td colspan="5" class="label">아직 성공한 조회가 없습니다.</td></tr>';
+    $('compare-note').textContent = '대기';
+    return;
+  }
+
+  const { raw, reading } = success;
+  const row = app.liveState.daily_readings.find(
+    (r) => r.signal_id === reading.signal_id && r.record_date === reading.record_date
+  );
+  if (!row) {
+    body.innerHTML = '<tr><td colspan="5" class="label">저장된 행을 찾지 못했습니다.</td></tr>';
+    return;
+  }
+
+  // 화면값은 DOM 에서 실제로 읽어 옵니다.
+  const shownValue = Number(($('fact-value').textContent || '').replace(/[^\d.-]/g, ''));
+  const shownUnit = ($('fact-unit').textContent || '').trim();
+  const shownSourceLink = $('fact-source').querySelector('a');
+  const shownSourceUrl = shownSourceLink ? shownSourceLink.getAttribute('href') : '';
+  const shownSourceTime = ($('fact-source-time').textContent || '').trim();
+  const shownFetchedAt = ($('fact-fetched-at').textContent || '').trim();
+  const shownTz = ($('fact-timezone').textContent || '').trim();
+
+  const rows = [
+    {
+      label: '값',
+      raw: String(raw.total_count),
+      stored: String(row.normalized_value),
+      shown: String(shownValue),
+      ok: raw.total_count === row.normalized_value && row.normalized_value === shownValue
+    },
+    {
+      label: '단위',
+      raw: `total_count 의 단위 = ${SIGNAL.unit} (정규화 규칙 상수)`,
+      stored: row.unit,
+      shown: shownUnit,
+      ok: row.unit === SIGNAL.unit && row.unit === shownUnit
+    },
+    {
+      label: '출처 주소',
+      raw: success.observation.source_url,
+      stored: row.reading.source_url,
+      shown: shownSourceUrl,
+      ok: success.observation.source_url === row.reading.source_url && row.reading.source_url === shownSourceUrl
+    },
+    {
+      label: '출처 시각',
+      raw: `${success.observation.target_date}T23:59:59+09:00`,
+      stored: row.reading.source_time,
+      shown: shownSourceTime,
+      ok:
+        `${success.observation.target_date}T23:59:59+09:00` === row.reading.source_time &&
+        kstStamp(row.reading.source_time) === shownSourceTime
+    },
+    {
+      label: '조회 시각',
+      raw: success.observation.attempted_at,
+      stored: row.reading.fetched_at,
+      shown: shownFetchedAt,
+      ok:
+        success.observation.attempted_at === row.reading.fetched_at &&
+        kstStamp(row.reading.fetched_at) === shownFetchedAt
+    },
+    {
+      label: '기준 시간대',
+      raw: 'Asia/Seoul (record_date 계산 기준)',
+      stored: row.reading.record_timezone,
+      shown: shownTz,
+      ok: row.reading.record_timezone === 'Asia/Seoul' && shownTz === 'Asia/Seoul'
+    }
+  ];
+
+  body.innerHTML = rows
+    .map(
+      (r) =>
+        `<tr><td class="label">${r.label}</td><td>${escapeHtml(r.raw)}</td><td>${escapeHtml(
+          r.stored
+        )}</td><td>${escapeHtml(r.shown)}</td><td>${verdict(r.ok)}</td></tr>`
+    )
+    .join('');
+
+  const allOk = rows.every((r) => r.ok);
+  const origin = success.restored ? '보존된 기록' : '방금 조회';
+  $('compare-note').textContent = allOk ? `${origin} · ${rows.length}행 전부 일치` : `${origin} · 불일치 있음`;
+}
+
+/**
+ * 이번 접속에서 아직 성공한 조회가 없어도, 보존된 기록에 함께 남긴 관측 원자료로
+ * 대조표를 채웁니다. 값을 만들어 내는 것이 아니라 저장된 조회 한 건을 그대로 다시 펴 보는 것입니다.
+ */
+function seedCompareFromStore() {
+  const rows = app.liveState.daily_readings;
+  const row = rows[rows.length - 1];
+  if (!row || !row.observation || !row.observation.raw_excerpt) return;
+  if (typeof row.observation.raw_excerpt.total_count !== 'number') return;
+  app.lastSuccess = {
+    raw: row.observation.raw_excerpt,
+    reading: row.reading,
+    observation: row.observation,
+    restored: true
+  };
+  app.lastObservation = row.observation;
+}
+
+function escapeHtml(value) {
+  return String(value === null || value === undefined ? '—' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ---------------- 03 보존 기록 ---------------- */
+
+function renderHistory() {
+  const rows = app.liveState.daily_readings;
+  const body = $('history-body');
+  const empty = $('history-empty');
+
+  if (!rows.length) {
+    body.innerHTML = '';
+    empty.hidden = false;
+    $('history-note').textContent = '0건';
+  } else {
+    empty.hidden = true;
+    body.innerHTML = rows
+      .map(
+        (r) => `<tr>
+          <td>${escapeHtml(r.record_date)}</td>
+          <td>${formatNumber(r.normalized_value)}</td>
+          <td>${escapeHtml(r.unit)}</td>
+          <td>${escapeHtml(kstStamp(r.reading.source_time) || '—')}</td>
+          <td>${escapeHtml(kstStamp(r.first_fetched_at) || '—')}</td>
+          <td>${escapeHtml(kstStamp(r.last_fetched_at) || '—')}</td>
+          <td>${escapeHtml(r.update_count || 1)}</td>
+        </tr>`
+      )
+      .join('');
+    $('history-note').textContent = `${rows.length}건 · 서로 다른 KST 날짜`;
+  }
+
+  const cmp = recomputeDelta(rows);
+  if (cmp.state === 'comparable') {
+    $('recalc-expr').textContent = `${formatNumber(cmp.current.normalized_value)} − ${formatNumber(
+      cmp.previous.normalized_value
+    )} = ${formatSigned(cmp.signed)} ${cmp.unit}`;
+    $('recalc-note').textContent = `${cmp.previous.record_date} 기록과 ${cmp.current.record_date} 기록을 조회 날짜순으로 놓고 뺐습니다. 저장 시점에 계산해 둔 값이 아니라 화면을 그릴 때마다 다시 계산합니다.`;
+  } else {
+    $('recalc-expr').textContent = '아직 계산하지 않습니다';
+    $('recalc-note').textContent = cmp.reason;
+  }
+}
+
+/* ---------------- 실제 조회 ---------------- */
+
+function setBusy(busy) {
+  app.busy = busy;
+  $('btn-fetch').disabled = busy;
+  $('btn-retry').disabled = busy;
+  if (busy) $('btn-fetch').textContent = '조회하는 중…';
+  else $('btn-fetch').textContent = '지금 다시 조회';
+}
+
+function startCooldown() {
+  app.cooldownUntil = Date.now() + COOLDOWN_MS;
+  const timer = setInterval(() => {
+    const left = Math.ceil((app.cooldownUntil - Date.now()) / 1000);
+    if (left <= 0) {
+      clearInterval(timer);
+      $('btn-fetch').disabled = false;
+      $('btn-retry').disabled = false;
+      renderQuota();
+      return;
+    }
+    $('btn-fetch').disabled = true;
+    $('btn-retry').disabled = true;
+    $('quota').textContent = `연타를 막기 위해 ${left}초 뒤에 다시 조회할 수 있습니다`;
+  }, 250);
+}
+
+function renderQuota() {
+  const obs = app.lastObservation;
+  if (obs && obs.rate_limit_remaining !== null && obs.rate_limit_remaining !== undefined) {
+    $('quota').textContent = `출처가 알려 준 남은 호출 수: ${obs.rate_limit_remaining} (인증 없이 분당 10회)`;
+  } else {
+    $('quota').textContent = '출처 호출 제한: 인증 없이 분당 10회';
+  }
+}
+
+async function runLiveFetch() {
+  if (app.busy || Date.now() < app.cooldownUntil) return;
+  setBusy(true);
+  try {
+    const outcome = await fetchLiveOutcome();
+    app.lastObservation = outcome.meta.observation;
+    app.liveState = applyOutcome(app.liveState, outcome);
+    if (outcome.kind === 'success' && app.liveState.status.error_code === 'none') {
+      app.lastSuccess = {
+        raw: outcome.raw,
+        reading: outcome.reading,
+        observation: outcome.meta.observation
+      };
+    }
+    renderNow();
+    renderCompare();
+    renderHistory();
+    renderQuota();
+  } finally {
+    setBusy(false);
+    startCooldown();
+  }
+}
+
+/* ---------------- 04 장애 재생 ---------------- */
+
+async function getFixture(fixtureId) {
+  if (app.fixtureCache.has(fixtureId)) return app.fixtureCache.get(fixtureId);
+  const fixture = await loadFixtureInBrowser(fixtureId);
+  app.fixtureCache.set(fixtureId, fixture);
+  return fixture;
+}
+
+function buildChips() {
+  const normal = ['T04-NORMAL-D1-A', 'T04-NORMAL-D1-B', 'T04-NORMAL-D2'];
+  const recover = ['T04-RECOVER-D2'];
+
+  $('chips-normal').innerHTML = normal
+    .map((id) => `<button class="chip" type="button" data-fixture="${id}">${id.replace('T04-', '')}</button>`)
+    .join('');
+
+  $('chips-failure').innerHTML = FAILURE_FIXTURES.map((id) => {
+    const code = fixtureErrorCode(id);
+    return `<button class="chip chip--danger" type="button" data-fixture="${id}">${ERROR_PRESENTATION[code].label}</button>`;
+  }).join('');
+
+  $('chips-recover').innerHTML =
+    recover
+      .map((id) => `<button class="chip chip--recover" type="button" data-fixture="${id}">회복 · ${id.replace('T04-', '')}</button>`)
+      .join('') + '<button class="chip" type="button" data-reset="1">합성 상태 초기화</button>';
+
+  document.querySelectorAll('[data-fixture]').forEach((el) => {
+    el.addEventListener('click', () => playFixture(el.dataset.fixture));
+  });
+  document.querySelectorAll('[data-reset]').forEach((el) => {
+    el.addEventListener('click', () => {
+      app.replayState = resetEvaluationState();
+      app.replayLog = [];
+      renderReplay();
+    });
+  });
+}
+
+function fixtureErrorCode(fixtureId) {
+  return {
+    'T04-TIMEOUT': 'timeout',
+    'T04-AUTH-401': 'auth',
+    'T04-RATE-429': 'rate_limit',
+    'T04-OFFLINE': 'offline',
+    'T04-SCHEMA-BREAK': 'schema_error'
+  }[fixtureId];
+}
+
+async function playFixture(fixtureId) {
+  let fixture;
+  try {
+    fixture = await getFixture(fixtureId);
+  } catch (error) {
+    app.replayLog.unshift({ text: `fixture 를 읽지 못했습니다: ${error.message}`, kind: 'err' });
+    renderReplay();
+    return;
+  }
+  const outcome = fixtureToOutcome(fixture);
+  app.replayState = applyOutcome(app.replayState, outcome);
+  const status = app.replayState.status;
+  app.replayLog.unshift({
+    seq: app.replayState.sequence,
+    text: `${fixtureId} → ${status.freshness} / ${status.error_code} · 행 ${app.replayState.daily_readings.length}건`,
+    kind: status.error_code === 'none' ? 'ok' : 'err'
+  });
+  renderReplay();
+}
+
+function renderReplay() {
+  const state = app.replayState;
+  const status = state.status;
+
+  $('replay-freshness').textContent = status ? status.freshness : '—';
+  $('replay-error').textContent = status ? status.error_code : '—';
+  $('replay-rows').textContent = String(state.daily_readings.length);
+  $('replay-lastgood').textContent = state.current_reading
+    ? `${state.current_reading.normalized_value} ${state.current_reading.unit}${
+        status && status.freshness === 'stale' ? ' · 오래된 값' : ''
+      }`
     : '—';
 
-  // 실패 안내
-  $('live-fail').replaceChildren();
-  if (!ok && status) {
-    $('live-fail').append(failBox(status.error_code, run, good, { retry: () => runLive() }));
-  }
-
-  renderFacts(reading, ok);
-  renderTrace();
-}
-
-function failBox(code, run, good, { retry } = {}) {
-  const view = ERROR_PRESENTATION[code];
-  const box = el('div', { className: 'failbox' });
-  box.append(el('h4', {}, `${view.label} — ${view.headline}`));
-  box.append(el('p', {}, view.detail));
-  if (good) {
-    box.append(el('p', {}, `아래 큰 숫자는 ${good.record_date} ${kstStamp(good.last_fetched_at)}에 받은 마지막 정상값 ${good.normalized_value} ${good.unit}입니다. 지우지 않고 그대로 둡니다.`));
-  } else {
-    box.append(el('p', {}, '보존된 마지막 정상값이 아직 없어 보여 줄 값이 없습니다. 값을 만들어 채우지 않습니다.'));
-  }
-  box.append(el('p', { className: 'next' }, `다음 행동 · ${view.next}`));
-  const tech = [
-    run?.message,
-    run?.retry_after_seconds ? `Retry-After ${run.retry_after_seconds}s` : null,
-    run?.fixture_id ? `fixture ${run.fixture_id}` : null
-  ].filter(Boolean).join(' · ');
-  if (tech) box.append(el('p', { className: 'tech' }, tech));
-  if (retry) {
-    const bar = el('div', { className: 'btnbar' });
-    const button = el('button', { className: 'retry', type: 'button' }, '다시 시도');
-    button.addEventListener('click', retry);
-    bar.append(button);
-    box.append(bar);
-  }
-  return box;
-}
-
-function renderFacts(reading, ok) {
-  const dl = $('live-facts');
-  dl.replaceChildren();
-  const rows = [
-    ['값', reading ? `${reading.normalized_value} ${reading.unit}` : '—'],
-    ['단위', reading ? `${reading.unit} (응답의 current_units에서 그대로 읽음)` : '—'],
-    ['출처', reading ? reading.source_name : SIGNAL.source_name],
-    ['호출 주소', reading ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, reading.source_url)
-      : el('a', { href: SIGNAL.endpoint, target: '_blank', rel: 'noreferrer noopener' }, SIGNAL.endpoint)],
-    ['출처 관측 시각', reading ? `${kstStamp(reading.source_time)}` : '—'],
-    ['조회 시각', reading ? `${kstStamp(reading.fetched_at)}${ok ? '' : ' (마지막 성공 기준)'}` : '—'],
-    ['기준 시간대', reading ? reading.record_timezone : 'Asia/Seoul'],
-    ['기록 날짜', reading ? reading.record_date : kstDate(new Date().toISOString())],
-    ['보존 여부', reading && store.rows.some((r) => r.record_date === reading.record_date)
-      ? '이 날짜는 data/daily.json에 보존되어 있습니다'
-      : '아직 보존 파일에 없습니다 (이 화면 세션에만 있는 값)']
-  ];
-  for (const [key, value] of rows) {
-    dl.append(el('div', {}, [el('dt', {}, key), el('dd', {}, value)]));
-  }
-}
-
-function renderTrace() {
-  const body = $('trace-table').querySelector('tbody');
-  body.replaceChildren();
-  if (!liveResult || liveResult.outcome !== 'success') {
-    body.append(el('tr', {}, el('td', { colSpan: 5, className: 'empty' },
-      liveResult ? '이번 조회가 실패해 대조할 원자료가 없습니다. 값을 지어내지 않습니다.' : '조회를 기다리는 중입니다.')));
-    return;
-  }
-  const raw = liveResult.raw;
-  const reading = liveResult.reading;
-  const rows = [
-    ['값', `current.temperature_2m = ${raw.current.temperature_2m}`, `normalized_value = ${reading.normalized_value}`,
-      `${$('live-value').textContent}`, raw.current.temperature_2m === reading.normalized_value && $('live-value').textContent === String(reading.normalized_value)],
-    ['단위', `current_units.temperature_2m = ${raw.current_units.temperature_2m}`, `unit = ${reading.unit}`,
-      $('live-unit').textContent, raw.current_units.temperature_2m === reading.unit && $('live-unit').textContent === reading.unit],
-    ['출처 관측 시각', `current.time = ${raw.current.time} (utc_offset_seconds = ${raw.utc_offset_seconds})`,
-      `source_time = ${reading.source_time}`, kstStamp(reading.source_time),
-      new Date(reading.source_time).getTime() === new Date(`${raw.current.time.length === 16 ? `${raw.current.time}:00` : raw.current.time}+09:00`).getTime()],
-    ['조회 시각', '요청을 보낸 시각(브라우저 시계)', `fetched_at = ${reading.fetched_at}`, kstStamp(reading.fetched_at), true],
-    ['기준 시간대', `timezone = ${raw.timezone}`, `record_timezone = ${reading.record_timezone}`, reading.record_timezone,
-      raw.timezone === reading.record_timezone],
-    ['기록 날짜', 'fetched_at을 Asia/Seoul로 변환', `record_date = ${reading.record_date}`, reading.record_date,
-      reading.record_date === kstDate(reading.fetched_at)]
-  ];
-  for (const [name, rawCell, storedCell, shownCell, ok] of rows) {
-    body.append(el('tr', {}, [
-      el('td', {}, name),
-      el('td', { className: 'mono' }, rawCell),
-      el('td', { className: 'mono' }, storedCell),
-      el('td', {}, text(shownCell)),
-      el('td', { className: ok ? 'match' : 'mismatch' }, ok ? '일치' : '불일치')
-    ]));
-  }
-}
-
-async function runLive() {
-  $('btn-refetch').disabled = true;
-  $('btn-refetch').textContent = '조회 중…';
-  $('live-value').replaceChildren(el('span', { className: 'skel' }));
-  liveResult = await fetchLive();
-  liveState = applyLiveResult(stateFromStore(store), liveResult);
-  renderLive();
-  $('btn-refetch').disabled = false;
-  $('btn-refetch').textContent = '지금 다시 조회';
-}
-
-$('btn-refetch').addEventListener('click', runLive);
-
-$('btn-raw').addEventListener('click', () => {
-  const box = $('live-extra');
-  if (box.dataset.mode === 'raw') { box.replaceChildren(); box.dataset.mode = ''; return; }
-  box.dataset.mode = 'raw';
-  box.replaceChildren(el('pre', {},
-    liveResult?.raw ? JSON.stringify(liveResult.raw, null, 2) : '이번 조회에서 받은 원자료가 없습니다.'));
-});
-
-$('btn-export').addEventListener('click', () => {
-  const box = $('live-extra');
-  if (box.dataset.mode === 'export') { box.replaceChildren(); box.dataset.mode = ''; return; }
-  box.dataset.mode = 'export';
-  if (!liveResult || liveResult.outcome !== 'success') {
-    box.replaceChildren(el('pre', {}, '성공한 조회가 없어 내보낼 기록이 없습니다.'));
-    return;
-  }
-  const row = liveState.daily_readings.find((r) => r.record_date === liveResult.reading.record_date);
-  box.replaceChildren(
-    el('p', { className: 'section-note', style: 'margin-top:12px' },
-      '자동 기록이 돌지 않았을 때 쓰는 수동 경로입니다. 아래 행을 data/daily.json의 rows에 넣고 커밋하면 같은 결과가 됩니다.'),
-    el('pre', {}, JSON.stringify({ ...row, raw_excerpt: rawExcerpt(liveResult.raw) }, null, 2))
-  );
-});
-
-/* ── 3. 보존된 일별 기록 ────────────────────────────── */
-function renderDaily() {
-  const body = $('daily-table').querySelector('tbody');
-  body.replaceChildren();
-  const rows = [...store.rows].sort((a, b) => a.record_date.localeCompare(b.record_date));
-
-  if (!rows.length) {
-    body.append(el('tr', {}, el('td', { colSpan: 8, className: 'empty' },
-      '보존된 기록이 아직 없습니다. 첫 실제 조회가 기록되면 여기에 한 줄이 생깁니다.')));
-  } else {
-    rows.forEach((row, index) => {
-      const prev = rows[index - 1];
-      let delta = '—';
-      let cls = '';
-      if (prev && prev.unit === row.unit) {
-        const d = Math.round((row.normalized_value - prev.normalized_value) * 1e6) / 1e6;
-        delta = `${signed(d)} ${row.unit}`;
-        cls = d > 0 ? 'match' : d < 0 ? 'mismatch' : '';
-      }
-      body.append(el('tr', {}, [
-        el('td', { className: 'mono' }, row.record_date),
-        el('td', { className: 'num' }, numText(row.normalized_value)),
-        el('td', {}, row.unit),
-        el('td', { className: `num ${cls}` }, delta),
-        el('td', {}, text(kstStamp(row.reading?.source_time))),
-        el('td', {}, text(kstStamp(row.last_fetched_at))),
-        el('td', { className: 'mono' }, row.record_id),
-        el('td', { className: 'num' }, String(row.update_count ?? 1))
-      ]));
-    });
-  }
-
-  // 재계산 패널
-  const panel = $('recompute');
-  panel.replaceChildren();
-  const d = recomputeDelta(rows);
-  panel.append(el('strong', { style: 'font-size:14px' }, '어제 대비 변화 재계산'));
-  if (d.state !== 'comparable') {
-    panel.append(el('p', { className: 'section-note', style: 'margin-top:6px' },
-      rows.length < 2
-        ? `보존된 기록이 ${rows.length}건이라 아직 계산하지 않습니다. 서로 다른 KST 날짜의 기록 2건이 모이면 여기에서 계산합니다.`
-        : '두 기록의 단위가 달라 계산하지 않습니다.'));
-    return;
-  }
-  panel.append(el('p', { className: 'section-note', style: 'margin-top:6px' },
-    '저장된 두 값을 KST 날짜순으로 놓고 뺄셈만 합니다. 화면 어디에도 미리 계산해 둔 변화값을 쓰지 않습니다.'));
-  panel.append(el('pre', {}, d.formula));
-  panel.append(el('p', { style: 'margin:12px 0 0;font-size:13px' }, [
-    el('span', { className: 'pill ok' }, `화면 표시값 ${signed(d.signed)} ${d.unit}`),
-    ' ',
-    el('span', { className: 'pill' }, `보존값 재계산 ${signed(d.signed)} ${d.unit}`),
-    ' ',
-    el('span', { className: 'pill ok' }, '일치')
-  ]));
-}
-
-/* ── 4. 재생 실험실 ─────────────────────────────────── */
-function labButton(label, onClick, className = '') {
-  const button = el('button', { type: 'button', className }, label);
-  button.addEventListener('click', onClick);
-  return button;
-}
-
-function buildLabControls() {
-  $('seq-normal').replaceChildren(
-    labButton('정상 3단계 (D1-A → D1-B → D2)', () => playSequence('normal'))
-  );
-  $('seq-failures').replaceChildren(
-    ...['timeout', 'auth', 'rate', 'offline', 'schema'].map((key) =>
-      labButton(SEQUENCES[key].title, () => playSequence(key)))
-  );
-  $('seq-recover').replaceChildren(
-    labButton('느린 응답 → 다시 시도 → 회복', () => playSequence('recover'))
-  );
-  $('seq-single').replaceChildren(
-    ...FIXTURE_FILES.map(({ id }) => labButton(id, () => playOne(id), 'small'))
-  );
-}
-
-function resetLab(message = 'reset — 합성 상태를 비웠습니다.') {
-  labState = createEmptyState();
-  labSeq = 0;
-  $('lab-log').replaceChildren();
-  logLab(message, 'ok');
-  renderLab();
-}
-
-function logLab(message, kind = '') {
-  labSeq += 1;
-  const list = $('lab-log');
-  list.prepend(el('li', {}, [
-    el('span', { className: 'seq' }, String(labSeq).padStart(2, '0')),
-    el('span', { className: kind }, message)
-  ]));
-}
-
-async function playOne(id, { keepState = true } = {}) {
-  if (labBusy) return;
-  labBusy = true;
-  if (!keepState) resetLab();
-  const fixture = fixtures[id];
-  logLab(`${id} 재생 중… (${fixture.description_ko})`);
-  renderLab();
-  await new Promise((r) => setTimeout(r, replayDelayMs(fixture)));
-  labState = runFixture(labState, fixture);
-  const status = labState.status;
-  logLab(
-    `${id} → ${status.freshness}/${status.error_code} · 행 ${labState.daily_readings.length}건 · 마지막 정상값 ${lastGoodRow(labState)?.normalized_value ?? '없음'}`,
-    status.error_code === 'none' ? 'ok' : 'err'
-  );
-  renderLab();
-  labBusy = false;
-}
-
-let seqBusy = false;
-async function playSequence(key) {
-  if (labBusy || seqBusy) return;
-  seqBusy = true;
-  resetLab(`reset — ${SEQUENCES[key].title} 재생을 시작합니다.`);
-  for (const id of SEQUENCES[key].ids) {
-    // 회복 순서의 마지막 단계는 사용자가 '다시 시도'를 누른 것과 같은 경로다.
-    await playOne(id);
-  }
-  seqBusy = false;
-}
-
-function renderLab() {
-  const status = labState.status;
-  const good = lastGoodRow(labState);
-  const cmp = labState.last_comparison;
-
-  const metrics = $('lab-metrics');
-  metrics.replaceChildren(
-    metric('신선도', status ? status.freshness : '—', status ? (status.freshness === 'fresh' ? '새 값' : '오래된 값') : '재생 전'),
-    metric('오류 코드', status ? status.error_code : '—', status && status.error_code !== 'none' ? ERROR_PRESENTATION[status.error_code].label : ''),
-    metric('일별 행', String(labState.daily_readings.length), '건'),
-    metric('마지막 정상값', good ? String(good.normalized_value) : '없음', good ? `${good.unit} · ${good.record_date}` : ''),
-    metric('전일 대비', cmp?.state === 'comparable' ? signed(cmp.signed) : '—', cmp?.state === 'comparable' ? cmp.unit : '기록 1건')
-  );
-
-  const failWrap = $('lab-fail');
-  failWrap.replaceChildren();
+  const alertBox = $('replay-alert');
   if (status && status.freshness === 'stale') {
-    failWrap.append(failBox(status.error_code, labState.last_run, good, {
-      retry: () => playOne('T04-RECOVER-D2')
-    }));
-  } else if (status && labState.last_run?.fixture_id === 'T04-RECOVER-D2') {
-    const box = el('div', { className: 'failbox', style: 'border-color:#b7ecc7;background:#ecfdf3' });
-    box.append(el('h4', { style: 'color:#14532d' }, '회복 확인 — fresh / none'));
-    box.append(el('p', { style: 'color:#166534' },
-      `다시 시도 뒤 상태가 fresh/none으로 돌아왔고, 다음 합성 날짜 ${labState.current_reading.record_date} 행이 1건 추가되어 총 ${labState.daily_readings.length}건, 저장값 ${labState.current_reading.normalized_value}, 전일 대비 ${cmp?.state === 'comparable' ? signed(cmp.signed) : '—'} ${cmp?.unit ?? ''}입니다.`));
-    failWrap.append(box);
-  }
-
-  const body = $('lab-table').querySelector('tbody');
-  body.replaceChildren();
-  const rows = labState.daily_readings;
-  if (!rows.length) {
-    body.append(el('tr', {}, el('td', { colSpan: 6, className: 'empty' },
-      '합성 상태가 비어 있습니다. 왼쪽에서 재생을 시작하세요.')));
+    const info = ERROR_PRESENTATION[status.error_code];
+    $('replay-alert-code').textContent = `${info.label} · ${info.code}`;
+    $('replay-alert-headline').textContent = info.headline;
+    $('replay-alert-detail').textContent = info.detail;
+    let next = info.next_action;
+    if (state.last_run && state.last_run.retry_after_seconds) {
+      next += ` 출처가 알려 준 대기 시간은 ${state.last_run.retry_after_seconds}초입니다.`;
+    }
+    $('replay-alert-next').textContent = next;
+    $('btn-replay-retry').textContent = `${info.retry_label} (T04-RECOVER-D2 재생)`;
+    alertBox.hidden = false;
   } else {
-    rows.forEach((row, index) => {
-      const prev = rows[index - 1];
-      const d = prev && prev.unit === row.unit
-        ? Math.round((row.normalized_value - prev.normalized_value) * 1e6) / 1e6
-        : null;
-      body.append(el('tr', {}, [
-        el('td', { className: 'mono' }, row.record_date),
-        el('td', { className: 'num' }, numText(row.normalized_value)),
-        el('td', {}, row.unit),
-        el('td', { className: `num ${d > 0 ? 'match' : d < 0 ? 'mismatch' : ''}` }, d === null ? '—' : `${signed(d)} ${row.unit}`),
-        el('td', { className: 'mono' }, row.record_id),
-        el('td', { className: 'num' }, String(row.update_count ?? 1))
-      ]));
-    });
+    alertBox.hidden = true;
   }
-}
 
-function metric(label, value, sub) {
-  return el('div', { className: 'metric' }, [
-    el('dt', {}, label),
-    el('dd', {}, [String(value), sub ? el('small', {}, ` ${sub}`) : ''])
-  ]);
-}
-
-$('btn-reset').addEventListener('click', () => resetLab());
-
-/* ── 5. 자가검증 ────────────────────────────────────── */
-function checkStep(state, fixture, seen) {
-  const expected = fixture.expected;
-  const rows = state.daily_readings;
-  const good = lastGoodRow(state);
-  const row = expected.record_date ? rows.find((r) => r.record_date === expected.record_date) : null;
-  const checks = [
-    ['freshness', state.status?.freshness, expected.freshness],
-    ['error_code', state.status?.error_code, expected.error_code],
-    ['row_count', rows.length, expected.row_count],
-    ['stored_value', good ? good.normalized_value : null, expected.stored_value],
-    ['delta', state.last_delta === null ? null : Math.abs(state.last_delta), expected.delta],
-    ['preserve_last_good', good !== null, expected.preserve_last_good]
-  ];
-  if (expected.record_date) checks.push(['record_date', row ? row.record_date : null, expected.record_date]);
-  if (expected.same_record_id_as) {
-    checks.push(['same_record_id', row ? row.record_id : null, seen[expected.same_record_id_as] ?? null]);
+  const body = $('replay-rows-body');
+  if (!state.daily_readings.length) {
+    body.innerHTML = '<tr><td colspan="4" class="label">아직 재생하지 않았습니다.</td></tr>';
+  } else {
+    body.innerHTML = state.daily_readings
+      .map(
+        (r) =>
+          `<tr><td>${escapeHtml(r.record_date)}</td><td>${formatNumber(r.normalized_value)}</td><td>${escapeHtml(
+            r.unit
+          )}</td><td>${escapeHtml(r.update_count || 1)}</td></tr>`
+      )
+      .join('');
   }
-  if (row) seen[fixture.fixture_id] = row.record_id;
-  return checks.filter(([, actual, want]) => JSON.stringify(actual) !== JSON.stringify(want));
+
+  $('replay-log').innerHTML = app.replayLog
+    .slice(0, 30)
+    .map(
+      (entry) =>
+        `<div class="log__row"><span class="log__seq">${escapeHtml(entry.seq ?? '·')}</span><span class="log__${
+          entry.kind
+        }">${escapeHtml(entry.text)}</span></div>`
+    )
+    .join('');
 }
 
-function runVerification() {
-  const body = $('verify-table').querySelector('tbody');
-  body.replaceChildren();
-  for (const [, seq] of Object.entries(SEQUENCES)) {
-    let state = createEmptyState();
-    const seen = {};
-    let bad = 0;
-    for (const id of seq.ids) {
-      state = runFixture(state, fixtures[id]);
-      bad += checkStep(state, fixtures[id], seen).length;
-    }
-    const good = lastGoodRow(state);
-    body.append(el('tr', {}, [
-      el('td', {}, seq.title),
-      el('td', { className: 'mono' }, seq.ids[seq.ids.length - 1]),
-      el('td', { className: 'mono' }, `${state.status.freshness} / ${state.status.error_code}`),
-      el('td', { className: 'num' }, String(state.daily_readings.length)),
-      el('td', { className: 'num' }, numText(good?.normalized_value)),
-      el('td', { className: 'num' }, state.last_delta === null ? '—' : signed(state.last_delta)),
-      el('td', { className: bad ? 'mismatch' : 'match' }, bad ? `불일치 ${bad}건` : '기대값과 일치')
-    ]));
-  }
+/* ---------------- 05 자가검증 ---------------- */
+
+async function sha256Hex(buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-async function verifyHashes() {
-  const body = $('hash-table').querySelector('tbody');
-  body.replaceChildren();
-  let manifest;
+function checkRow(name, ok, detail) {
+  return `<div class="check">
+    <span class="verdict verdict--${ok === null ? 'na' : ok ? 'ok' : 'no'}">${
+      ok === null ? '확인 불가' : ok ? '통과' : '실패'
+    }</span>
+    <span class="check__name">${escapeHtml(name)}</span>
+    <span class="check__detail">${escapeHtml(detail)}</span>
+  </div>`;
+}
+
+async function runSelfcheck() {
+  const list = $('selfcheck-list');
+  list.innerHTML = checkRow('실행 중…', null, '');
+  const results = [];
+
+  // 1) 공개 꾸러미 파일 해시
   try {
-    manifest = await (await fetch(`${BASE_PATH}asset-manifest.json`, { cache: 'no-store' })).json();
-  } catch {
-    body.append(el('tr', {}, el('td', { colSpan: 4, className: 'empty' }, 'asset-manifest.json을 읽지 못했습니다.')));
-    return;
-  }
-  $('pkg-id').textContent = `package_id ${manifest.package_id} · sha256 · 파일 ${manifest.files.length}건`;
-
-  if (!(globalThis.crypto && crypto.subtle)) {
-    body.append(el('tr', {}, el('td', { colSpan: 4, className: 'empty' },
-      '이 브라우저 환경에서는 해시를 계산할 수 없습니다. node scripts/verify-assets.js로 확인하세요.')));
-    return;
-  }
-  let bad = 0;
-  for (const entry of manifest.files) {
-    let cells;
-    try {
-      const buffer = await (await fetch(`${BASE_PATH}${entry.path}`, { cache: 'no-store' })).arrayBuffer();
-      const digest = await crypto.subtle.digest('SHA-256', buffer);
-      const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-      const ok = hex === entry.sha256 && buffer.byteLength === entry.bytes;
-      if (!ok) bad += 1;
-      cells = [
-        el('td', { className: 'mono' }, entry.path),
-        el('td', { className: 'num' }, String(buffer.byteLength)),
-        el('td', { className: 'mono' }, `${hex.slice(0, 24)}…`),
-        el('td', { className: ok ? 'match' : 'mismatch' }, ok ? '일치' : '불일치')
-      ];
-    } catch {
-      bad += 1;
-      cells = [
-        el('td', { className: 'mono' }, entry.path),
-        el('td', { className: 'num' }, '—'),
-        el('td', {}, '읽지 못함'),
-        el('td', { className: 'mismatch' }, '확인 불가')
-      ];
+    const manifest = await (await fetch('vendor/aleph-t04/asset-manifest.json', { cache: 'no-store' })).json();
+    let matched = 0;
+    let mismatched = [];
+    if (!crypto || !crypto.subtle) {
+      results.push({ name: '공개 꾸러미 파일 해시 대조', ok: null, detail: '이 브라우저에서 SHA-256 을 쓸 수 없습니다' });
+    } else {
+      for (const file of manifest.files) {
+        const response = await fetch(`vendor/aleph-t04/${file.path}`, { cache: 'no-store' });
+        const buffer = await response.arrayBuffer();
+        const hex = await sha256Hex(buffer);
+        if (hex === file.sha256) matched += 1;
+        else mismatched.push(file.path);
+      }
+      results.push({
+        name: `공개 꾸러미 파일 해시 대조 · ${manifest.package_id}`,
+        ok: mismatched.length === 0,
+        detail: mismatched.length === 0 ? `${matched}/${manifest.files.length} 일치` : `불일치: ${mismatched.join(', ')}`
+      });
     }
-    body.append(el('tr', {}, cells));
-  }
-  $('pkg-id').textContent += bad ? ` · 불일치 ${bad}건` : ' · 전체 일치';
-}
-
-/* ── 시작 ───────────────────────────────────────────── */
-async function boot() {
-  try {
-    const response = await fetch('./data/daily.json', { cache: 'no-store' });
-    if (response.ok) {
-      const parsed = await response.json();
-      if (Array.isArray(parsed.rows)) store = parsed;
-    }
-  } catch {
-    // 저장 파일을 못 읽으면 빈 상태로 둔다. 값을 지어내지 않는다.
-  }
-  renderDaily();
-  liveState = stateFromStore(store);
-  renderLive();
-  runLive();
-
-  try {
-    fixtures = await loadFixtures();
-    buildLabControls();
-    resetLab();
-    runVerification();
   } catch (error) {
-    $('lab-log').replaceChildren(el('li', {}, [el('span', { className: 'seq' }, '!!'),
-      el('span', { className: 'err' }, `fixture를 불러오지 못했습니다: ${error.message}`)]));
+    results.push({ name: '공개 꾸러미 파일 해시 대조', ok: false, detail: error.message });
   }
-  verifyHashes();
+
+  // 2) 재생 순서 7가지
+  for (const sequence of REPLAY_SEQUENCES) {
+    try {
+      let state = resetEvaluationState();
+      let lastFixture = null;
+      for (const fixtureId of sequence.steps) {
+        const fixture = await getFixture(fixtureId);
+        lastFixture = fixture;
+        state = applyOutcome(state, fixtureToOutcome(fixture));
+      }
+      const expected = lastFixture.expected;
+      const storedValue = state.current_reading ? state.current_reading.normalized_value : null;
+      const checks = [
+        ['freshness', state.status.freshness, expected.freshness],
+        ['error_code', state.status.error_code, expected.error_code],
+        ['row_count', state.daily_readings.length, expected.row_count],
+        ['stored_value', storedValue, expected.stored_value],
+        ['delta', state.last_delta ?? null, expected.delta ?? null]
+      ];
+      const failed = checks.filter(([, actual, want]) => actual !== want);
+      results.push({
+        name: `재생 순서 · ${sequence.title}`,
+        ok: failed.length === 0,
+        detail:
+          failed.length === 0
+            ? `${expected.freshness}/${expected.error_code} · 행 ${expected.row_count} · 값 ${expected.stored_value}`
+            : failed.map(([key, actual, want]) => `${key}: ${actual}≠${want}`).join(', ')
+      });
+    } catch (error) {
+      results.push({ name: `재생 순서 · ${sequence.title}`, ok: false, detail: error.message });
+    }
+  }
+
+  // 3) 같은 KST 날짜 재실행이 행을 늘리지 않는지
+  try {
+    let state = resetEvaluationState();
+    const a = await getFixture('T04-NORMAL-D1-A');
+    const b = await getFixture('T04-NORMAL-D1-B');
+    state = applyOutcome(state, fixtureToOutcome(a));
+    const firstId = state.daily_readings[0].record_id;
+    state = applyOutcome(state, fixtureToOutcome(b));
+    state = applyOutcome(state, fixtureToOutcome(b));
+    const sameId = state.daily_readings[0].record_id === firstId;
+    results.push({
+      name: '같은 KST 날짜 3회 성공 → 행 1건 유지',
+      ok: state.daily_readings.length === 1 && sameId,
+      detail: `행 ${state.daily_readings.length}건 · 갱신 ${state.daily_readings[0].update_count}회 · record_id 동일 ${sameId}`
+    });
+  } catch (error) {
+    results.push({ name: '같은 KST 날짜 3회 성공 → 행 1건 유지', ok: false, detail: error.message });
+  }
+
+  // 4) 브라우저 저장소 미사용
+  let storageUsed = false;
+  try {
+    storageUsed = (window.localStorage && window.localStorage.length > 0) || document.cookie.length > 0;
+  } catch {
+    storageUsed = false;
+  }
+  results.push({
+    name: '브라우저 저장소 · 쿠키 미사용',
+    ok: !storageUsed,
+    detail: storageUsed ? '저장된 항목이 있습니다' : 'localStorage 0건 · 쿠키 0건'
+  });
+
+  list.innerHTML = results.map((r) => checkRow(r.name, r.ok, r.detail)).join('');
+  const passed = results.filter((r) => r.ok === true).length;
+  $('selfcheck-note').textContent = `${passed}/${results.length} 통과`;
+}
+
+/* ---------------- 시작 ---------------- */
+
+async function boot() {
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  $('tz-chip').textContent = `기준 시간대 Asia/Seoul`;
+
+  try {
+    const response = await fetch('data/daily.json', { cache: 'no-store' });
+    if (response.ok) {
+      const store = await response.json();
+      if (store && Array.isArray(store.daily_readings)) {
+        app.store = store;
+        app.liveState = storeToState(store);
+        seedCompareFromStore();
+      }
+    }
+  } catch {
+    /* 보존 기록을 읽지 못해도 화면은 뜹니다. */
+  }
+
+  renderNow();
+  renderHistory();
+  renderCompare();
+  buildChips();
+  renderReplay();
+
+  $('btn-fetch').addEventListener('click', runLiveFetch);
+  $('btn-retry').addEventListener('click', runLiveFetch);
+  $('btn-selfcheck').addEventListener('click', runSelfcheck);
+  $('btn-replay-retry').addEventListener('click', () => playFixture('T04-RECOVER-D2'));
+
+  $('footer-line').textContent = `공개 심사용 정보판 · 기준 시간대 Asia/Seoul · 오늘(KST) ${kstDate(
+    new Date().toISOString()
+  )}`;
+
+  await runLiveFetch();
 }
 
 boot();
