@@ -3,6 +3,7 @@ import { SIGNAL, applyLiveResult, fetchLive } from './live-adapter.js';
 import { SEQUENCES, loadFixtures, replayDelayMs, runFixture } from './replay-adapter.js';
 import { emptyStore, stateFromStore } from './store.js';
 
+const NS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, children = []) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -12,31 +13,25 @@ const el = (tag, props = {}, children = []) => {
   }
   return node;
 };
-const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toLocaleString('ko-KR')}`;
+const svg = (tag, attrs = {}, text) => {
+  const node = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+  if (text !== undefined) node.textContent = String(text);
+  return node;
+};
 const comma = (n) => Number(n).toLocaleString('ko-KR');
+const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${comma(Math.abs(n))}`;
 
 let store = emptyStore(SIGNAL.signal_id);
 let liveResult = null;
 let liveState = createEmptyState();
 let fixtures = null;
 let labState = createEmptyState();
+let labSteps = [];
 let busy = false;
 let seqBusy = false;
 
-$('source-link').href = SIGNAL.source_home;
-$('subject').textContent = SIGNAL.title;
-
-/* ── 스탯 스트립 ─────────────────────────────────── */
-
-function renderStrip() {
-  const good = lastGoodRow(liveState);
-  $('s-source').textContent = 'GitHub REST API';
-  $('s-target').textContent = liveResult?.targetDate ?? '—';
-  $('s-rows').textContent = `${store.rows.length}건`;
-  $('s-last').textContent = good ? kstStamp(good.last_fetched_at) : '없음';
-}
-
-/* ── CURRENT ─────────────────────────────────────── */
+/* ── 헤드라인 ────────────────────────────────────── */
 
 function renderLive() {
   const status = liveState.status;
@@ -47,9 +42,15 @@ function renderLive() {
   const value = $('value');
   value.classList.toggle('is-stale', !fresh);
   if (reading) value.textContent = comma(reading.normalized_value);
-  else if (status) value.textContent = '값 없음';
+  else if (status) value.textContent = '—';
   else value.replaceChildren(el('span', { className: 'skel' }));
   $('unit').textContent = reading ? reading.unit : '';
+
+  const target = liveResult?.targetDate ?? reading?.raw_excerpt?.target_date_kst;
+  $('eyebrow').replaceChildren(
+    document.createTextNode('어제 하루 동안 생긴 공개 GITHUB 저장소'),
+    target ? el('b', {}, `  ·  ${target}`) : ''
+  );
 
   const cmp = liveState.last_comparison;
   const delta = $('delta');
@@ -62,23 +63,52 @@ function renderLive() {
     );
   } else {
     delta.className = 'delta none';
-    delta.textContent = store.rows.length ? '비교할 어제 기록 없음' : '보존된 기록이 아직 없음';
+    delta.textContent = '';
   }
 
-  const tag = $('tag');
-  tag.className = `tag ${fresh ? 'fresh' : 'stale'}`;
-  tag.textContent = fresh ? '새 값' : status ? `오래된 값 · ${status.error_code}` : '확인 중';
-  $('tag-note').textContent = good && !fresh
-    ? `마지막 성공 ${kstStamp(good.last_fetched_at)}`
-    : reading ? `조회 ${kstStamp(reading.fetched_at)}` : '';
+  const pill = $('pill');
+  pill.className = `pill ${fresh ? 'fresh' : 'stale'}`;
+  pill.textContent = fresh ? '새 값' : status ? `오래된 값 · ${status.error_code}` : '확인 중';
+
+  // C06~C09: 출처 · 출처 관측 시각 · 조회 시각 · 기준 시간대를 한 줄로 유지한다.
+  const meta = $('meta');
+  meta.replaceChildren(
+    ...(reading
+      ? [
+          el('span', {}, reading.source_name),
+          el('span', {}, `관측 ${kstStamp(reading.source_time)}`),
+          el('span', {}, `조회 ${kstStamp(reading.fetched_at)}`),
+          el('span', {}, reading.record_timezone)
+        ]
+      : [el('span', {}, SIGNAL.source_name), el('span', {}, 'Asia/Seoul')])
+  );
 
   $('failure').replaceChildren();
   if (status && !fresh) {
     $('failure').append(failureBox(status.error_code, liveState.last_run, good, runLive));
   }
 
-  renderFacts(reading, fresh);
-  renderStrip();
+  renderDetail(reading);
+}
+
+function renderDetail(reading) {
+  const dl = $('detail');
+  dl.replaceChildren();
+  const rows = [
+    ['집계 범위', SIGNAL.scope_note],
+    ['세는 구간', liveResult?.targetDate
+      ? `${liveResult.targetDate}T00:00:00+09:00 .. T23:59:59+09:00`
+      : '어제 하루 (KST)'],
+    ['집계 완전성', liveResult?.outcome === 'success'
+      ? (liveResult.incomplete ? 'incomplete_results: true — 실제보다 적을 수 있음' : 'incomplete_results: false')
+      : '—'],
+    ['남은 호출', typeof liveResult?.rateRemaining === 'number' ? `${liveResult.rateRemaining} / 10 per min` : '—'],
+    ['호출 주소', reading
+      ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, reading.source_url)
+      : '—'],
+    ['record_date', reading ? reading.record_date : '—']
+  ];
+  for (const [k, v] of rows) dl.append(el('dt', {}, k), el('dd', {}, v));
 }
 
 function failureBox(code, run, good, onRetry) {
@@ -87,95 +117,98 @@ function failureBox(code, run, good, onRetry) {
   box.append(el('h3', {}, `${view.label} — ${view.headline}`));
   box.append(el('p', {}, view.detail));
   box.append(el('p', {}, good
-    ? `위의 값은 ${good.record_date} ${kstStamp(good.last_fetched_at)}에 받은 마지막 정상값 ${comma(good.normalized_value)} ${good.unit}입니다. 지우지 않고 그대로 둡니다.`
+    ? `위 숫자는 ${good.record_date} ${kstStamp(good.last_fetched_at)}에 받은 마지막 정상값 ${comma(good.normalized_value)} ${good.unit}입니다. 지우지 않고 그대로 둡니다.`
     : '보존된 마지막 정상값이 없어 보여 줄 값이 없습니다. 값을 만들어 채우지 않습니다.'));
   box.append(el('p', { className: 'next' }, `다음 행동 · ${view.next}`));
 
-  const tech = [
-    run?.message,
-    run?.retry_after_seconds ? `Retry-After ${run.retry_after_seconds}초` : null,
-    run?.fixture_id
-  ].filter(Boolean).join(' · ');
+  const tech = [run?.message, run?.retry_after_seconds ? `Retry-After ${run.retry_after_seconds}s` : null, run?.fixture_id]
+    .filter(Boolean).join(' · ');
   if (tech) box.append(el('p', { className: 'tech' }, tech));
 
   if (onRetry) {
     const b = el('button', { className: 'retry', type: 'button' }, '다시 시도');
-    b.addEventListener('click', onRetry);
+    b.addEventListener('click', async () => {
+      // 인증 없는 검색은 IP당 분당 10회다. 연타로 스스로 제한을 부르지 않게 막는다.
+      b.disabled = true;
+      b.textContent = '다시 시도 중…';
+      await onRetry();
+    });
     box.append(b);
   }
   return box;
 }
 
-function renderFacts(reading, fresh) {
-  const dl = $('facts');
-  dl.replaceChildren();
-  const rows = [
-    ['값', reading ? `${comma(reading.normalized_value)} ${reading.unit}` : '—'],
-    ['단위', reading ? reading.unit : SIGNAL.unit],
-    ['출처', reading
-      ? el('span', {}, [reading.source_name, el('small', {}, SIGNAL.scope_note)])
-      : SIGNAL.source_name],
-    ['출처 관측 시각', reading
-      ? el('span', {}, [kstStamp(reading.source_time), el('small', {}, '대상일의 끝. 값이 확정된 시점입니다.')])
-      : '—'],
-    ['조회 시각', reading
-      ? el('span', {}, [kstStamp(reading.fetched_at), el('small', {}, fresh ? '방금 받은 응답' : '마지막으로 성공한 조회')])
-      : '—'],
-    ['기준 시간대', el('span', {}, ['Asia/Seoul', el('small', {}, '날짜 키와 화면의 모든 시각 기준')])],
-    ['호출 주소', reading
-      ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, '조회 주소 열기')
-      : '—']
-  ];
-  for (const [key, value] of rows) {
-    dl.append(el('div', {}, [el('dt', {}, key), el('dd', {}, value)]));
-  }
-}
-
 async function runLive() {
-  const button = $('refetch');
-  button.disabled = true;
-  button.textContent = '조회 중…';
-  $('value').replaceChildren(el('span', { className: 'skel' }));
   liveResult = await fetchLive();
   liveState = applyLiveResult(stateFromStore(store), liveResult);
   renderLive();
-  cooldown(button);
 }
 
-// 인증 없는 검색 API는 IP당 분당 10회다. 연타로 스스로 제한을 부르지 않게 막는다.
-function cooldown(button) {
-  let left = Math.ceil(SIGNAL.cooldown_ms / 1000);
-  const paint = () => { button.textContent = `다시 조회 · ${left}s`; };
-  button.disabled = true;
-  paint();
-  const id = setInterval(() => {
-    left -= 1;
-    if (left <= 0) {
-      clearInterval(id);
-      button.disabled = false;
-      button.textContent = '지금 다시 조회';
-      return;
-    }
-    paint();
-  }, 1000);
-}
+/* ── 차트 ────────────────────────────────────────── */
 
-$('refetch').addEventListener('click', runLive);
+function renderChart(rows) {
+  const node = $('chart');
+  node.replaceChildren();
+  const W = 1000;
+  const H = 280;
+  const pad = { top: 34, right: 60, bottom: 34, left: 60 };
+  node.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  if (!rows.length) {
+    node.append(svg('line', { class: 'placeholder', x1: pad.left, y1: H / 2, x2: W - pad.right, y2: H / 2 }));
+    node.append(svg('text', { class: 'hint', x: W / 2, y: H / 2 - 16, 'text-anchor': 'middle' },
+      '보존된 기록이 아직 없습니다'));
+    return;
+  }
+
+  const values = rows.map((r) => r.normalized_value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || Math.max(Math.abs(max) * 0.1, 1);
+  const lo = min - span * 0.45;
+  const hi = max + span * 0.45;
+
+  const x = (i) => rows.length === 1
+    ? W / 2
+    : pad.left + (i * (W - pad.left - pad.right)) / (rows.length - 1);
+  const y = (v) => pad.top + ((hi - v) / (hi - lo)) * (H - pad.top - pad.bottom);
+
+  // 가로 격자 3줄
+  for (let i = 0; i <= 2; i += 1) {
+    const gy = pad.top + (i * (H - pad.top - pad.bottom)) / 2;
+    node.append(svg('line', { class: 'grid', x1: pad.left - 14, y1: gy, x2: W - pad.right + 14, y2: gy }));
+  }
+  node.append(svg('text', { class: 'axis', x: pad.left - 20, y: pad.top + 4, 'text-anchor': 'end' }, comma(Math.round(hi))));
+  node.append(svg('text', { class: 'axis', x: pad.left - 20, y: H - pad.bottom + 4, 'text-anchor': 'end' }, comma(Math.round(lo))));
+
+  if (rows.length > 1) {
+    const d = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(r.normalized_value)}`).join(' ');
+    node.append(svg('path', { class: 'line', d }));
+  }
+
+  rows.forEach((row, i) => {
+    const cx = x(i);
+    const cy = y(row.normalized_value);
+    node.append(svg('circle', { class: 'dot', cx, cy, r: 5 }));
+    const anchor = rows.length === 1 ? 'middle' : i === 0 ? 'start' : i === rows.length - 1 ? 'end' : 'middle';
+    node.append(svg('text', { class: 'dot-label', x: cx, y: cy - 16, 'text-anchor': anchor }, comma(row.normalized_value)));
+    node.append(svg('text', { class: 'axis', x: cx, y: H - 8, 'text-anchor': anchor }, row.record_date.slice(5)));
+  });
+}
 
 /* ── HISTORY ─────────────────────────────────────── */
 
 function renderDaily() {
+  const rows = [...store.rows].sort((a, b) => a.record_date.localeCompare(b.record_date));
+  renderChart(rows);
+
   const body = $('daily').querySelector('tbody');
   body.replaceChildren();
-  const rows = [...store.rows].sort((a, b) => a.record_date.localeCompare(b.record_date));
-
   if (!rows.length) {
     body.append(el('tr', {}, el('td', { colSpan: 6, className: 'empty' },
-      '보존된 기록이 아직 없습니다. 첫 실제 조회가 기록되면 여기에 한 줄이 생깁니다.')));
+      '첫 실제 조회가 기록되면 여기에 한 줄이 생깁니다.')));
     return;
   }
-
-  const max = Math.max(...rows.map((r) => r.normalized_value), 1);
   rows.forEach((row, i) => {
     const prev = rows[i - 1];
     let delta = '—';
@@ -187,17 +220,10 @@ function renderDaily() {
     }
     body.append(el('tr', {}, [
       el('td', { className: 'mono' }, row.record_date),
-      el('td', { className: 'num big' }, el('span', {}, [
-        comma(row.normalized_value),
-        el('span', { className: 'bar', style: 'margin-top:5px' },
-          el('i', { style: `width:${Math.round((row.normalized_value / max) * 100)}%` }))
-      ])),
+      el('td', { className: 'num big' }, comma(row.normalized_value)),
       el('td', {}, row.unit),
       el('td', { className: cls }, delta),
-      el('td', {}, el('span', {}, [
-        kstStamp(row.reading?.source_time) ?? '—',
-        row.raw_excerpt?.target_date_kst ? el('span', { className: 'sub' }, `대상 ${row.raw_excerpt.target_date_kst}`) : null
-      ])),
+      el('td', { className: 'mono' }, kstStamp(row.reading?.source_time) ?? '—'),
       el('td', {}, row.reading?.source_url
         ? el('a', { href: row.reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, 'API')
         : '—')
@@ -218,13 +244,14 @@ function buildControls() {
     button('정상 3단계', () => playSequence('normal'), 'solid'),
     button('reset', () => resetLab()),
     el('span', { className: 'break' }),
-    ...['timeout', 'auth', 'rate', 'offline', 'schema'].map((key) =>
-      button(SEQUENCES[key].title, () => playSequence(key)))
+    ...['timeout', 'auth', 'rate', 'offline', 'schema'].map((k) =>
+      button(SEQUENCES[k].title, () => playSequence(k)))
   );
 }
 
 function resetLab() {
   labState = createEmptyState();
+  labSteps = [];
   renderLab();
 }
 
@@ -234,6 +261,12 @@ async function playOne(id) {
   const fixture = fixtures[id];
   await new Promise((r) => setTimeout(r, replayDelayMs(fixture)));
   labState = runFixture(labState, fixture);
+  labSteps.push({
+    id,
+    freshness: labState.status.freshness,
+    code: labState.status.error_code,
+    rows: labState.daily_readings.length
+  });
   renderLab();
   busy = false;
 }
@@ -251,11 +284,20 @@ function renderLab() {
   const good = lastGoodRow(labState);
   const cmp = labState.last_comparison;
 
+  const timeline = $('timeline');
+  timeline.replaceChildren(
+    ...labSteps.map((step) => el('div', { className: `step ${step.freshness === 'fresh' ? 'ok' : 'err'}` }, [
+      el('div', { className: 'rail' }),
+      el('span', { className: 'id' }, step.id.replace('T04-', '')),
+      el('span', { className: 'st' }, step.freshness === 'fresh' ? 'fresh' : step.code)
+    ]))
+  );
+
   $('state').replaceChildren(
-    stat('FRESHNESS', status ? (status.freshness === 'fresh' ? '새 값' : '오래된 값') : '—', true),
+    stat('FRESHNESS', status ? status.freshness : '—', true),
     stat('ERROR_CODE', status ? status.error_code : '—', true),
-    stat('ROWS', `${labState.daily_readings.length}`),
-    stat('LAST GOOD', good ? `${good.normalized_value}` : '없음', !good),
+    stat('ROWS', String(labState.daily_readings.length)),
+    stat('LAST GOOD', good ? String(good.normalized_value) : '—'),
     stat('DELTA', cmp?.state === 'comparable' ? signed(cmp.signed) : '—')
   );
 
@@ -269,8 +311,7 @@ function renderLab() {
   body.replaceChildren();
   const rows = labState.daily_readings;
   if (!rows.length) {
-    body.append(el('tr', {}, el('td', { colSpan: 5, className: 'empty' },
-      '합성 상태가 비어 있습니다. 위에서 재생을 시작하세요.')));
+    body.append(el('tr', {}, el('td', { colSpan: 5, className: 'empty' }, '재생 전')));
     return;
   }
   rows.forEach((row, i) => {
@@ -314,9 +355,7 @@ async function boot() {
     buildControls();
     resetLab();
   } catch (error) {
-    $('controls').replaceChildren(
-      el('p', { className: 'note' }, `fixture를 불러오지 못했습니다: ${error.message}`)
-    );
+    $('controls').replaceChildren(el('p', { className: 'note' }, `fixture 로드 실패: ${error.message}`));
   }
 }
 
