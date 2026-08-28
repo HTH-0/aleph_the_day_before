@@ -48,7 +48,7 @@ function renderLive() {
 
   const target = liveResult?.targetDate ?? reading?.raw_excerpt?.target_date_kst;
   $('eyebrow').replaceChildren(
-    document.createTextNode('어제 하루 동안 생긴 공개 GITHUB 저장소'),
+    document.createTextNode('어제 하루, GitHub에 새로 생긴 공개 저장소'),
     target ? el('b', {}, `  ·  ${target}`) : ''
   );
 
@@ -155,7 +155,7 @@ function renderStats(rows) {
       cell('LATEST', '—', null, ''),
       cell('HIGH', '—', null, ''),
       cell('LOW', '—', null, ''),
-      cell('TRACKED', '0', 'DAYS', '')
+      cell('TRACKED', '0', 'DAYS', '', 'teal')
     );
     return;
   }
@@ -171,7 +171,7 @@ function renderStats(rows) {
     cell('LATEST', comma(latest.normalized_value), unit, latest.record_date, 'accent'),
     cell('HIGH', comma(high), unit, highRow.record_date, 'up'),
     cell('LOW', comma(low), unit, lowRow.record_date, 'down'),
-    cell('TRACKED', String(rows.length), rows.length === 1 ? 'DAY' : 'DAYS', '')
+    cell('TRACKED', String(rows.length), rows.length === 1 ? 'DAY' : 'DAYS', '', 'teal')
   );
 }
 
@@ -194,8 +194,8 @@ function renderChart(rows) {
   const defs = svg('defs');
   const grad = svg('linearGradient', { id: 'areaFill', x1: 0, y1: 0, x2: 0, y2: 1 });
   grad.append(
-    svg('stop', { offset: '0%', 'stop-color': '#2f5eff', 'stop-opacity': 0.32 }),
-    svg('stop', { offset: '100%', 'stop-color': '#2f5eff', 'stop-opacity': 0 })
+    svg('stop', { offset: '0%', 'stop-color': '#5b52dd', 'stop-opacity': 0.28 }),
+    svg('stop', { offset: '100%', 'stop-color': '#5b52dd', 'stop-opacity': 0 })
   );
   defs.append(grad);
   node.append(defs);
