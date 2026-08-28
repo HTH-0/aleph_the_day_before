@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>오늘의 진짜 정보판 — 어제 생긴 공개 저장소</title>
+<meta name="description" content="어제 하루 동안 새로 생긴 공개 GitHub 저장소 수를 매일 한 줄씩 기록하고, 데이터가 오지 않을 때도 정직하게 설명하는 정보판." />
+<meta name="referrer" content="no-referrer" />
+<link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="brand">
+      <span class="brand__tag">T04</span>
+      <span>오늘의 진짜 정보판</span>
+    </div>
+    <div class="topbar__meta">
+      <span class="tz-chip" id="tz-chip">Asia/Seoul</span>
+      <span class="tz-chip mono" id="clock">—</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 01 지금 값 -->
+  <section class="panel" id="panel-now">
+    <div class="panel__head">
+      <span class="panel__no">01</span>
+      <h2 class="panel__title">지금 값</h2>
+      <span class="panel__note" id="now-status-note">불러오는 중</span>
+    </div>
+    <div class="panel__body">
+      <p class="question" id="signal-question">—</p>
+      <h3 class="signal-title" id="signal-title">—</h3>
+      <p class="signal-def" id="signal-def">—</p>
+
+      <div class="readout">
+        <span class="readout__value" id="value-main">—</span>
+        <span class="readout__unit" id="value-unit"></span>
+        <span class="delta" id="delta-badge">전일 대비 —</span>
+      </div>
+
+      <p class="target-line" id="target-line">대상 구간을 불러오는 중입니다.</p>
+
+      <div class="honesty" aria-label="값의 정직 상태">
+        <div class="honesty__cell">
+          <div class="honesty__label">값의 상태</div>
+          <div class="honesty__value honesty__value--muted" id="honesty-freshness">—</div>
+        </div>
+        <div class="honesty__cell">
+          <div class="honesty__label">마지막 성공</div>
+          <div class="honesty__value honesty__value--muted" id="honesty-lastgood">—</div>
+        </div>
+        <div class="honesty__cell">
+          <div class="honesty__label">이번 시도</div>
+          <div class="honesty__value honesty__value--muted" id="honesty-attempt">—</div>
+        </div>
+      </div>
+
+      <div class="facts" id="facts">
+        <div class="fact">
+          <div class="fact__label">값</div>
+          <div class="fact__value" id="fact-value">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">단위</div>
+          <div class="fact__value" id="fact-unit">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">출처</div>
+          <div class="fact__value" id="fact-source">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">출처 시각</div>
+          <div class="fact__value" id="fact-source-time">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">조회 시각</div>
+          <div class="fact__value" id="fact-fetched-at">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">기준 시간대</div>
+          <div class="fact__value" id="fact-timezone">—</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="btn-fetch" type="button">지금 다시 조회</button>
+        <span class="quota" id="quota">출처 호출 제한: 인증 없이 분당 10회</span>
+      </div>
+
+      <div class="alert" id="live-alert" hidden>
+        <span class="alert__code" id="live-alert-code">—</span>
+        <p class="alert__headline" id="live-alert-headline"></p>
+        <p class="alert__detail" id="live-alert-detail"></p>
+        <p class="alert__next" id="live-alert-next"></p>
+        <div class="alert__actions">
+          <button class="btn btn--sm" id="btn-retry" type="button">다시 시도</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 대조표 -->
+  <section class="panel" id="panel-compare">
+    <div class="panel__head">
+      <span class="panel__no">02</span>
+      <h2 class="panel__title">원자료 · 저장값 · 화면값 대조</h2>
+      <span class="panel__note" id="compare-note">—</span>
+    </div>
+    <div class="panel__body">
+      <p class="hint">방금 성공한 조회 한 건을 세 자리에서 나란히 놓고 행마다 같은지 판정합니다. 화면에만 예쁘게 보이고 저장은 다른 값이 되는 일을 막기 위한 표입니다.</p>
+      <div class="table-scroll">
+        <table class="grid" id="compare-table">
+          <thead>
+            <tr><th>항목</th><th>원자료</th><th>저장값</th><th>화면값</th><th>판정</th></tr>
+          </thead>
+          <tbody id="compare-body">
+            <tr><td colspan="5" class="label">아직 성공한 조회가 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 보존 기록 -->
+  <section class="panel" id="panel-history">
+    <div class="panel__head">
+      <span class="panel__no">03</span>
+      <h2 class="panel__title">보존된 일별 기록</h2>
+      <span class="panel__note" id="history-note">—</span>
+    </div>
+    <div class="panel__body">
+      <p class="hint">
+        같은 <code class="mono">Asia/Seoul</code> 날짜의 조회는 행을 늘리지 않고 같은 행을 갱신합니다. 다음 날짜의 조회는 새 행이 됩니다.
+        이 표는 저장소에 커밋된 <code class="mono">data/daily.json</code> 을 그대로 읽습니다. 브라우저 저장소를 쓰지 않으므로 시크릿 창에서도 같은 기록이 보입니다.
+      </p>
+      <div class="table-scroll">
+        <table class="grid" id="history-table">
+          <thead>
+            <tr><th>조회 날짜 (KST)</th><th>값</th><th>단위</th><th>출처 시각</th><th>처음 조회</th><th>마지막 조회</th><th>갱신 횟수</th></tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+      <div id="history-empty" class="empty" hidden>보존된 기록이 아직 없습니다.</div>
+
+      <div class="recalc">
+        <div class="recalc__title">어제 대비 변화 — 저장값에서 다시 계산</div>
+        <div class="recalc__expr" id="recalc-expr">—</div>
+        <div class="recalc__note" id="recalc-note">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 장애 재생 -->
+  <section class="panel" id="panel-replay">
+    <div class="panel__head">
+      <span class="panel__no">04</span>
+      <h2 class="panel__title">장애 재생 — 합성 시험값</h2>
+      <span class="panel__note">vendor/aleph-t04/fixtures</span>
+    </div>
+    <div class="panel__body">
+      <p class="hint">
+        공개 꾸러미의 결정론 fixture 9종을 재생합니다. 여기서 만들어지는 값은 전부 합성 시험값이며 메모리에만 존재합니다.
+        새로고침하면 사라지고, 위의 실제 기록과 절대 섞이지 않습니다.
+      </p>
+
+      <div class="fixture-groups">
+        <div>
+          <div class="fixture-group__label">정상</div>
+          <div class="chiprow" id="chips-normal"></div>
+        </div>
+        <div>
+          <div class="fixture-group__label">외부 원천 실패 5종</div>
+          <div class="chiprow" id="chips-failure"></div>
+        </div>
+        <div>
+          <div class="fixture-group__label">회복 · 초기화</div>
+          <div class="chiprow" id="chips-recover"></div>
+        </div>
+      </div>
+
+      <div class="replay-state">
+        <div class="fact">
+          <div class="fact__label">값의 상태</div>
+          <div class="fact__value" id="replay-freshness">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">error_code</div>
+          <div class="fact__value" id="replay-error">—</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">일별 행 수</div>
+          <div class="fact__value" id="replay-rows">0</div>
+        </div>
+        <div class="fact">
+          <div class="fact__label">마지막 정상값</div>
+          <div class="fact__value" id="replay-lastgood">—</div>
+        </div>
+      </div>
+
+      <div class="alert" id="replay-alert" hidden>
+        <span class="alert__code" id="replay-alert-code">—</span>
+        <p class="alert__headline" id="replay-alert-headline"></p>
+        <p class="alert__detail" id="replay-alert-detail"></p>
+        <p class="alert__next" id="replay-alert-next"></p>
+        <div class="alert__actions">
+          <button class="btn btn--sm" id="btn-replay-retry" type="button">다시 시도</button>
+        </div>
+      </div>
+
+      <div class="table-scroll" style="margin-top:16px">
+        <table class="grid">
+          <thead>
+            <tr><th>합성 날짜</th><th>값</th><th>단위</th><th>갱신 횟수</th></tr>
+          </thead>
+          <tbody id="replay-rows-body">
+            <tr><td colspan="4" class="label">아직 재생하지 않았습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="synthetic-note">합성 시계의 2026-08-24 / 2026-08-25 는 저장·실패·계산 경로를 재현할 뿐입니다. 03번의 실제 KST 날짜 2건을 대신하지 않습니다.</p>
+
+      <div class="log" id="replay-log"></div>
+    </div>
+  </section>
+
+  <!-- 05 자가검증 -->
+  <section class="panel" id="panel-selfcheck">
+    <div class="panel__head">
+      <span class="panel__no">05</span>
+      <h2 class="panel__title">자가검증</h2>
+      <span class="panel__note" id="selfcheck-note">—</span>
+    </div>
+    <div class="panel__body">
+      <p class="hint">공개 꾸러미의 파일 해시와 재생 순서 7가지를 이 화면에서 직접 다시 대조합니다.</p>
+      <div class="controls" style="margin-bottom:14px">
+        <button class="btn btn--ghost" id="btn-selfcheck" type="button">자가검증 실행</button>
+      </div>
+      <div class="check-list" id="selfcheck-list">
+        <div class="check"><span class="check__name">아직 실행하지 않았습니다.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 확인 방법 -->
+  <section class="panel" id="panel-howto">
+    <div class="panel__head">
+      <span class="panel__no">06</span>
+      <h2 class="panel__title">짧은 확인 방법</h2>
+    </div>
+    <div class="panel__body">
+      <div class="howto">
+        <div class="howto__row">
+          <div class="howto__q">① 어디로 가나요</div>
+          <div class="howto__a">이 페이지 하나입니다. 새 시크릿 창에서 계정·로그인·인증·초대·비밀번호·OAuth·CAPTCHA 없이 열립니다.</div>
+        </div>
+        <div class="howto__row">
+          <div class="howto__q">② 3단계 이내 무엇을 하나요</div>
+          <div class="howto__a">
+            <ol>
+              <li>01번 칸의 <code>지금 다시 조회</code> 를 누릅니다.</li>
+              <li>04번 칸의 <code>느린 응답</code> 을 누릅니다.</li>
+              <li>이어서 <code>다시 시도</code> 를 누릅니다.</li>
+            </ol>
+          </div>
+        </div>
+        <div class="howto__row">
+          <div class="howto__q">③ 무엇이 보이면 통과인가요</div>
+          <div class="howto__a">
+            ①에서 값·단위·출처·출처 시각·조회 시각·<code>Asia/Seoul</code> 이 한 화면에 있고, 02번 대조표의 여섯 행이 모두 <code>일치</code> 입니다.
+            ②에서 <code>stale / timeout</code> 이 되고 마지막 정상값 <code>105</code> 가 오래된 값 표시와 함께 남으며 행은 1건 그대로입니다.
+            ③ 뒤에 <code>fresh / none</code> 으로 돌아오고 행이 2건이 되며, 합성 날짜 <code>2026-08-25</code> 행이 정확히 한 건 늘고 값은 <code>120</code>, 변화는 <code>+15</code> 입니다.
+          </div>
+        </div>
+        <div class="howto__row">
+          <div class="howto__q">④ 안 될 때 무엇이 보이나요</div>
+          <div class="howto__a">
+            큰 숫자 자리에는 마지막 정상값이 그대로 남고 노란 안내 상자가 뜹니다. 실패 5종은 서로 다른 문장과 서로 다른 다음 행동을 보여 줍니다.
+            03번의 보존된 기록은 어떤 실패에서도 줄지 않습니다.
+          </div>
+        </div>
+      </div>
+
+      <ul class="rules">
+        <li>비밀키를 쓰지 않는 공개 출처만 조회합니다. 브라우저 코드·배포 파일·네트워크 요청·Git 기록 어디에도 비밀값이 없습니다.</li>
+        <li>개인정보나 개인 기록을 저장하지도 표시하지도 않습니다. 조회하는 값은 공개 저장소 개수 하나입니다.</li>
+        <li>실패했을 때 값을 지어내지 않습니다. 마지막 정상값을 그대로 두고 오래된 값이라고 말합니다.</li>
+        <li>기록이 한 건뿐이면 변화를 계산하지 않고 한 건이라고 말합니다. 두 번째 실제 날짜는 기다려서 얻습니다.</li>
+        <li>전일 대비는 저장할 때 계산해 두지 않고, 보여 줄 때마다 두 저장값에서 다시 뺍니다.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <span id="footer-line">공개 심사용 정보판 · 조회 기준 시간대 Asia/Seoul</span>
+</footer>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

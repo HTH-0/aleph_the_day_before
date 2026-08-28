@@ -1,0 +1,42 @@
+name: 일별 기록
+
+on:
+  schedule:
+    # 00:30 UTC = 09:30 KST
+    - cron: '30 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-record
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 공개 꾸러미 해시 대조
+        run: node scripts/verify-assets.js
+
+      - name: 실제 공개 원천 조회
+        run: node scripts/record-daily.js
+
+      - name: 변경 사항 커밋
+        run: |
+          if git diff --quiet -- data/daily.json; then
+            echo "기록에 변경이 없습니다. 커밋하지 않습니다."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/daily.json
+          git commit -m "기록: $(TZ=Asia/Seoul date +%Y-%m-%d)"
+          git push
