@@ -1,7 +1,0 @@
-{
-  "schema_version": "t04-daily-store-v1",
-  "signal_id": "github-public-repos-created",
-  "record_timezone": "Asia/Seoul",
-  "generated_at": null,
-  "daily_readings": []
-}
