@@ -70,7 +70,7 @@ function renderLive() {
   pill.className = `pill ${fresh ? 'fresh' : 'stale'}`;
   pill.textContent = fresh ? '새 값' : status ? `오래된 값 · ${status.error_code}` : '확인 중';
 
-  // C06~C09: 출처 · 출처 관측 시각 · 조회 시각 · 기준 시간대를 한 줄로 유지한다.
+  // C06~C09: 출처 · 출처 관측 시각 · 조회 시각 · 기준 시간대를 상시 노출.
   const meta = $('meta');
   meta.replaceChildren(
     ...(reading
@@ -144,19 +144,65 @@ async function runLive() {
   renderLive();
 }
 
+/* ── 통계 카드 ───────────────────────────────────── */
+// 데이터가 하루치뿐이어도 세 값(최고·최저·변동폭)과 기록 일수는 항상 계산된다.
+
+function renderStats(rows) {
+  const dl = $('stats');
+  dl.replaceChildren();
+  if (!rows.length) {
+    dl.append(
+      cell('LATEST', '—', null, ''),
+      cell('HIGH', '—', null, ''),
+      cell('LOW', '—', null, ''),
+      cell('TRACKED', '0', 'DAYS', '')
+    );
+    return;
+  }
+  const values = rows.map((r) => r.normalized_value);
+  const unit = rows[rows.length - 1].unit;
+  const high = Math.max(...values);
+  const low = Math.min(...values);
+  const highRow = rows.find((r) => r.normalized_value === high);
+  const lowRow = rows.find((r) => r.normalized_value === low);
+  const latest = rows[rows.length - 1];
+
+  dl.append(
+    cell('LATEST', comma(latest.normalized_value), unit, latest.record_date, 'accent'),
+    cell('HIGH', comma(high), unit, highRow.record_date, 'up'),
+    cell('LOW', comma(low), unit, lowRow.record_date, 'down'),
+    cell('TRACKED', String(rows.length), rows.length === 1 ? 'DAY' : 'DAYS', '')
+  );
+}
+
+function cell(label, value, unit, sub, tone = '') {
+  return el('div', { className: `stat-cell ${tone}` }, [
+    el('dt', {}, label),
+    el('dd', {}, [value, unit ? ` ${unit}` : '', sub ? el('small', {}, sub) : null])
+  ]);
+}
+
 /* ── 차트 ────────────────────────────────────────── */
 
 function renderChart(rows) {
   const node = $('chart');
   node.replaceChildren();
-  const W = 1000;
-  const H = 280;
-  const pad = { top: 34, right: 60, bottom: 34, left: 60 };
-  node.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  const W = 1040;
+  const H = 320;
+  const pad = { top: 40, right: 24, bottom: 40, left: 24 };
+
+  const defs = svg('defs');
+  const grad = svg('linearGradient', { id: 'areaFill', x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(
+    svg('stop', { offset: '0%', 'stop-color': '#2f5eff', 'stop-opacity': 0.32 }),
+    svg('stop', { offset: '100%', 'stop-color': '#2f5eff', 'stop-opacity': 0 })
+  );
+  defs.append(grad);
+  node.append(defs);
 
   if (!rows.length) {
     node.append(svg('line', { class: 'placeholder', x1: pad.left, y1: H / 2, x2: W - pad.right, y2: H / 2 }));
-    node.append(svg('text', { class: 'hint', x: W / 2, y: H / 2 - 16, 'text-anchor': 'middle' },
+    node.append(svg('text', { class: 'hint', x: W / 2, y: H / 2 - 20, 'text-anchor': 'middle' },
       '보존된 기록이 아직 없습니다'));
     return;
   }
@@ -164,35 +210,44 @@ function renderChart(rows) {
   const values = rows.map((r) => r.normalized_value);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const span = max - min || Math.max(Math.abs(max) * 0.1, 1);
-  const lo = min - span * 0.45;
-  const hi = max + span * 0.45;
+  const span = max - min || Math.max(Math.abs(max) * 0.12, 1);
+  const lo = min - span * 0.5;
+  const hi = max + span * 0.5;
 
   const x = (i) => rows.length === 1
     ? W / 2
     : pad.left + (i * (W - pad.left - pad.right)) / (rows.length - 1);
   const y = (v) => pad.top + ((hi - v) / (hi - lo)) * (H - pad.top - pad.bottom);
+  const base = H - pad.bottom;
 
-  // 가로 격자 3줄
-  for (let i = 0; i <= 2; i += 1) {
-    const gy = pad.top + (i * (H - pad.top - pad.bottom)) / 2;
-    node.append(svg('line', { class: 'grid', x1: pad.left - 14, y1: gy, x2: W - pad.right + 14, y2: gy }));
+  // 촘촘한 가로 격자 5줄 + 눈금값
+  for (let i = 0; i <= 4; i += 1) {
+    const gv = lo + ((hi - lo) * (4 - i)) / 4;
+    const gy = pad.top + (i * (H - pad.top - pad.bottom)) / 4;
+    node.append(svg('line', { class: `grid${i === 4 ? ' zero' : ''}`, x1: pad.left, y1: gy, x2: W - pad.right, y2: gy }));
+    node.append(svg('text', { class: 'axis', x: pad.left, y: gy - 6 }, comma(Math.round(gv))));
   }
-  node.append(svg('text', { class: 'axis', x: pad.left - 20, y: pad.top + 4, 'text-anchor': 'end' }, comma(Math.round(hi))));
-  node.append(svg('text', { class: 'axis', x: pad.left - 20, y: H - pad.bottom + 4, 'text-anchor': 'end' }, comma(Math.round(lo))));
 
   if (rows.length > 1) {
-    const d = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(r.normalized_value)}`).join(' ');
-    node.append(svg('path', { class: 'line', d }));
+    const linePath = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(r.normalized_value)}`).join(' ');
+    const areaPath = `${linePath} L${x(rows.length - 1)},${base} L${x(0)},${base} Z`;
+    node.append(svg('path', { class: 'area', d: areaPath }));
+    node.append(svg('path', { class: 'line', d: linePath }));
+  } else {
+    // 점 하나뿐이어도 영역감을 준다.
+    const cx = x(0);
+    const cy = y(rows[0].normalized_value);
+    node.append(svg('path', { class: 'area', d: `M${cx - 40},${cy} L${cx + 40},${cy} L${cx + 40},${base} L${cx - 40},${base} Z` }));
   }
 
   rows.forEach((row, i) => {
     const cx = x(i);
     const cy = y(row.normalized_value);
-    node.append(svg('circle', { class: 'dot', cx, cy, r: 5 }));
+    node.append(svg('circle', { class: 'dot-outer', cx, cy, r: 7 }));
+    node.append(svg('circle', { class: 'dot-inner', cx, cy, r: 3 }));
     const anchor = rows.length === 1 ? 'middle' : i === 0 ? 'start' : i === rows.length - 1 ? 'end' : 'middle';
-    node.append(svg('text', { class: 'dot-label', x: cx, y: cy - 16, 'text-anchor': anchor }, comma(row.normalized_value)));
-    node.append(svg('text', { class: 'axis', x: cx, y: H - 8, 'text-anchor': anchor }, row.record_date.slice(5)));
+    node.append(svg('text', { class: 'dot-label', x: cx, y: cy - 18, 'text-anchor': anchor }, comma(row.normalized_value)));
+    node.append(svg('text', { class: 'axis', x: cx, y: base + 24, 'text-anchor': anchor }, row.record_date.slice(5)));
   });
 }
 
@@ -200,6 +255,7 @@ function renderChart(rows) {
 
 function renderDaily() {
   const rows = [...store.rows].sort((a, b) => a.record_date.localeCompare(b.record_date));
+  renderStats(rows);
   renderChart(rows);
 
   const body = $('daily').querySelector('tbody');
@@ -264,8 +320,7 @@ async function playOne(id) {
   labSteps.push({
     id,
     freshness: labState.status.freshness,
-    code: labState.status.error_code,
-    rows: labState.daily_readings.length
+    code: labState.status.error_code
   });
   renderLab();
   busy = false;
@@ -284,8 +339,7 @@ function renderLab() {
   const good = lastGoodRow(labState);
   const cmp = labState.last_comparison;
 
-  const timeline = $('timeline');
-  timeline.replaceChildren(
+  $('timeline').replaceChildren(
     ...labSteps.map((step) => el('div', { className: `step ${step.freshness === 'fresh' ? 'ok' : 'err'}` }, [
       el('div', { className: 'rail' }),
       el('span', { className: 'id' }, step.id.replace('T04-', '')),
