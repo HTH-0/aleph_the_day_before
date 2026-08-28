@@ -3,91 +3,133 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>오늘의 진짜 정보판 — 어제 생긴 GitHub 저장소</title>
+<title>THE_DAY_BEFORE — 어제 생긴 공개 GitHub 저장소</title>
 <meta name="description" content="어제 하루 동안 생긴 공개 GitHub 저장소 수를 매일 기록하고, 어제와 비교하고, 데이터가 오지 않을 때도 정직하게 설명하는 정보판." />
 <meta name="color-scheme" content="light" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
 <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <span class="wordmark"><b>THE</b><i>_</i><b>DAY</b><i>_</i><b>BEFORE</b></span>
+    <span class="spacer"></span>
+    <span class="chip">무로그인</span>
+    <span class="chip">비밀키 없음</span>
+    <span class="chip">Asia/Seoul</span>
+  </div>
+</nav>
+
+<div class="strip">
+  <div class="strip-inner" id="strip">
+    <span>출처 <b id="s-source">—</b></span>
+    <span>대상일 <b id="s-target">—</b></span>
+    <span>보존된 기록 <b id="s-rows">—</b></span>
+    <span>마지막 성공 <b id="s-last">—</b></span>
+  </div>
+</div>
+
 <main class="wrap">
 
-  <div class="masthead">
-    <h1>오늘의 진짜 정보판</h1>
-    <p>어제 하루 동안 생긴 공개 GitHub 저장소</p>
-  </div>
-
-  <!-- 지금 값 · C04~C09 -->
+  <!-- CURRENT -->
   <section>
-    <h2>지금 값</h2>
-    <div class="panel">
-      <p class="headline" id="headline">어제 세상에는 새 저장소가 몇 개 생겼을까?<span id="headline-sub">조회하는 중입니다.</span></p>
+    <div class="sec-head">
+      <h2>CURRENT</h2>
+      <p>현재 상태</p>
+    </div>
 
-      <div class="reading">
-        <span class="value" id="value"><span class="skel"></span></span>
-        <span class="unit" id="unit"></span>
-        <span class="delta none" id="delta">어제 기록과 비교 중</span>
+    <div class="card current">
+      <div class="current-main">
+        <p class="q">어제 세상에는 새 저장소가 몇 개 생겼을까?</p>
+        <p class="subject" id="subject">어제 하루 동안 생긴 공개 GitHub 저장소</p>
+
+        <div class="reading">
+          <span class="value" id="value"><span class="skel"></span></span>
+          <span class="unit" id="unit"></span>
+          <span class="delta none" id="delta">어제 기록과 비교 중</span>
+        </div>
+
+        <div class="status-row">
+          <span class="tag fresh" id="tag">확인 중</span>
+          <span class="tag-note" id="tag-note"></span>
+        </div>
+
+        <div id="failure"></div>
+
+        <div class="actions">
+          <button class="solid" id="refetch">지금 다시 조회</button>
+        </div>
       </div>
 
-      <span class="badge fresh" id="badge">확인 중</span>
-
-      <div id="failure"></div>
-
-      <dl class="facts" id="facts"></dl>
-
-      <div class="actions">
-        <button class="solid" id="refetch">지금 다시 조회</button>
+      <div class="current-side">
+        <dl class="facts" id="facts"></dl>
       </div>
     </div>
   </section>
 
-  <!-- 보존된 일별 기록 · C23·C24의 화면 표시값 -->
+  <!-- HISTORY -->
   <section>
-    <h2>보존된 일별 기록</h2>
-    <div class="panel">
+    <div class="sec-head">
+      <h2>HISTORY</h2>
+      <p>일별 추이 및 대조</p>
+    </div>
+
+    <div class="card">
       <div class="scroll"><table id="daily">
         <thead><tr>
-          <th>기록 날짜 (KST)</th>
+          <th>기록 날짜 · KST</th>
           <th class="num">값</th>
           <th>단위</th>
           <th class="num">어제 대비</th>
           <th>출처 관측 시각</th>
-          <th>출처 URL</th>
+          <th>출처</th>
         </tr></thead>
         <tbody><tr><td colspan="6" class="empty">불러오는 중…</td></tr></tbody>
       </table></div>
     </div>
   </section>
 
-  <!-- 장애 재생 · C12~C19 -->
+  <!-- FALLBACK -->
   <section>
-    <h2>데이터가 안 올 때</h2>
-    <div class="panel">
-      <p class="replay-note">아래 값은 전부 공개 결정론 fixture의 합성 시험값입니다. 실제 관측이 아니며, 위의 보존된 기록과 섞이지 않습니다.</p>
-
-      <div class="controls" id="controls"></div>
-
-      <div id="replay-failure"></div>
-
-      <dl class="state" id="state"></dl>
-
-      <div class="scroll"><table id="replay-daily">
-        <thead><tr>
-          <th>합성 날짜</th><th class="num">값</th><th>단위</th><th class="num">어제 대비</th><th>record_id</th>
-        </tr></thead>
-        <tbody><tr><td colspan="5" class="empty">합성 상태가 비어 있습니다. 위에서 재생을 시작하세요.</td></tr></tbody>
-      </table></div>
+    <div class="sec-head">
+      <h2>FALLBACK</h2>
+      <p>예외 상황 재현</p>
     </div>
+
+    <details class="fallback" id="fallback">
+      <summary>
+        <span class="sum-title">데이터가 안 올 때</span>
+        <span class="sum-desc">외부 실패 5종 · 합성 시험값</span>
+        <span class="spacer"></span>
+        <span class="chevron">▼</span>
+      </summary>
+
+      <div class="fallback-body">
+        <p class="note">이 안의 값은 전부 공개 결정론 fixture의 합성 시험값입니다. 실제 관측이 아니며, 위 HISTORY의 보존된 기록과 섞이지 않습니다.</p>
+
+        <div class="controls" id="controls"></div>
+        <div id="replay-failure"></div>
+        <dl class="state" id="state"></dl>
+
+        <div class="card scroll"><table id="replay-daily">
+          <thead><tr>
+            <th>합성 날짜</th><th class="num">값</th><th>단위</th><th class="num">어제 대비</th><th>record_id</th>
+          </tr></thead>
+          <tbody><tr><td colspan="5" class="empty">합성 상태가 비어 있습니다. 위에서 재생을 시작하세요.</td></tr></tbody>
+        </table></div>
+      </div>
+    </details>
   </section>
 
   <footer>
     출처 · <a id="source-link" href="#" target="_blank" rel="noreferrer noopener">GitHub REST API</a> ·
     기준 시간대 <span class="mono">Asia/Seoul</span> ·
-    합성 fixture <span class="mono">aleph-t04-real-information-board-public-contract-v2</span>
+    fixture <span class="mono">aleph-t04-…-public-contract-v2</span>
   </footer>
 </main>
 

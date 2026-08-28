@@ -12,7 +12,8 @@ const el = (tag, props = {}, children = []) => {
   }
   return node;
 };
-const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n)}`;
+const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toLocaleString('ko-KR')}`;
+const comma = (n) => Number(n).toLocaleString('ko-KR');
 
 let store = emptyStore(SIGNAL.signal_id);
 let liveResult = null;
@@ -20,10 +21,22 @@ let liveState = createEmptyState();
 let fixtures = null;
 let labState = createEmptyState();
 let busy = false;
+let seqBusy = false;
 
 $('source-link').href = SIGNAL.source_home;
+$('subject').textContent = SIGNAL.title;
 
-/* ── 지금 값 ─────────────────────────────────────── */
+/* ── 스탯 스트립 ─────────────────────────────────── */
+
+function renderStrip() {
+  const good = lastGoodRow(liveState);
+  $('s-source').textContent = 'GitHub REST API';
+  $('s-target').textContent = liveResult?.targetDate ?? '—';
+  $('s-rows').textContent = `${store.rows.length}건`;
+  $('s-last').textContent = good ? kstStamp(good.last_fetched_at) : '없음';
+}
+
+/* ── CURRENT ─────────────────────────────────────── */
 
 function renderLive() {
   const status = liveState.status;
@@ -33,7 +46,7 @@ function renderLive() {
 
   const value = $('value');
   value.classList.toggle('is-stale', !fresh);
-  if (reading) value.textContent = String(reading.normalized_value);
+  if (reading) value.textContent = comma(reading.normalized_value);
   else if (status) value.textContent = '값 없음';
   else value.replaceChildren(el('span', { className: 'skel' }));
   $('unit').textContent = reading ? reading.unit : '';
@@ -41,24 +54,23 @@ function renderLive() {
   const cmp = liveState.last_comparison;
   const delta = $('delta');
   if (cmp?.state === 'comparable') {
-    delta.className = `delta ${cmp.direction === 'increase' ? 'up' : cmp.direction === 'decrease' ? 'down' : 'flat'}`;
-    delta.textContent = `${signed(cmp.signed)} ${cmp.unit}`;
+    const dir = cmp.direction === 'increase' ? 'up' : cmp.direction === 'decrease' ? 'down' : 'flat';
+    delta.className = `delta ${dir}`;
+    delta.replaceChildren(
+      el('span', { className: 'caret' }, dir === 'up' ? '▲' : dir === 'down' ? '▼' : '■'),
+      el('span', {}, `${signed(cmp.signed)} ${cmp.unit}`)
+    );
   } else {
     delta.className = 'delta none';
     delta.textContent = store.rows.length ? '비교할 어제 기록 없음' : '보존된 기록이 아직 없음';
   }
 
-  const badge = $('badge');
-  badge.className = `badge ${fresh ? 'fresh' : 'stale'}`;
-  badge.textContent = fresh
-    ? '새 값'
-    : status
-      ? `오래된 값 · ${status.error_code}`
-      : '확인 중';
-
-  $('headline-sub').textContent = liveResult?.targetDate
-    ? `${liveResult.targetDate} 하루(KST 00:00:00 ~ 23:59:59) 동안 생성된 저장소를 셉니다.`
-    : '조회하는 중입니다.';
+  const tag = $('tag');
+  tag.className = `tag ${fresh ? 'fresh' : 'stale'}`;
+  tag.textContent = fresh ? '새 값' : status ? `오래된 값 · ${status.error_code}` : '확인 중';
+  $('tag-note').textContent = good && !fresh
+    ? `마지막 성공 ${kstStamp(good.last_fetched_at)}`
+    : reading ? `조회 ${kstStamp(reading.fetched_at)}` : '';
 
   $('failure').replaceChildren();
   if (status && !fresh) {
@@ -66,6 +78,7 @@ function renderLive() {
   }
 
   renderFacts(reading, fresh);
+  renderStrip();
 }
 
 function failureBox(code, run, good, onRetry) {
@@ -74,7 +87,7 @@ function failureBox(code, run, good, onRetry) {
   box.append(el('h3', {}, `${view.label} — ${view.headline}`));
   box.append(el('p', {}, view.detail));
   box.append(el('p', {}, good
-    ? `위의 값은 ${good.record_date} ${kstStamp(good.last_fetched_at)}에 받은 마지막 정상값 ${good.normalized_value} ${good.unit}입니다. 지우지 않고 그대로 둡니다.`
+    ? `위의 값은 ${good.record_date} ${kstStamp(good.last_fetched_at)}에 받은 마지막 정상값 ${comma(good.normalized_value)} ${good.unit}입니다. 지우지 않고 그대로 둡니다.`
     : '보존된 마지막 정상값이 없어 보여 줄 값이 없습니다. 값을 만들어 채우지 않습니다.'));
   box.append(el('p', { className: 'next' }, `다음 행동 · ${view.next}`));
 
@@ -86,9 +99,9 @@ function failureBox(code, run, good, onRetry) {
   if (tech) box.append(el('p', { className: 'tech' }, tech));
 
   if (onRetry) {
-    const button = el('button', { className: 'retry', type: 'button' }, '다시 시도');
-    button.addEventListener('click', onRetry);
-    box.append(button);
+    const b = el('button', { className: 'retry', type: 'button' }, '다시 시도');
+    b.addEventListener('click', onRetry);
+    box.append(b);
   }
   return box;
 }
@@ -97,7 +110,7 @@ function renderFacts(reading, fresh) {
   const dl = $('facts');
   dl.replaceChildren();
   const rows = [
-    ['값', reading ? `${reading.normalized_value} ${reading.unit}` : '—'],
+    ['값', reading ? `${comma(reading.normalized_value)} ${reading.unit}` : '—'],
     ['단위', reading ? reading.unit : SIGNAL.unit],
     ['출처', reading
       ? el('span', {}, [reading.source_name, el('small', {}, SIGNAL.scope_note)])
@@ -106,11 +119,11 @@ function renderFacts(reading, fresh) {
       ? el('span', {}, [kstStamp(reading.source_time), el('small', {}, '대상일의 끝. 값이 확정된 시점입니다.')])
       : '—'],
     ['조회 시각', reading
-      ? el('span', {}, [kstStamp(reading.fetched_at), el('small', {}, fresh ? '방금 받은 응답입니다.' : '마지막으로 성공한 조회입니다.')])
+      ? el('span', {}, [kstStamp(reading.fetched_at), el('small', {}, fresh ? '방금 받은 응답' : '마지막으로 성공한 조회')])
       : '—'],
-    ['기준 시간대', el('span', {}, ['Asia/Seoul', el('small', {}, '날짜 키와 화면의 모든 시각이 이 기준입니다.')])],
+    ['기준 시간대', el('span', {}, ['Asia/Seoul', el('small', {}, '날짜 키와 화면의 모든 시각 기준')])],
     ['호출 주소', reading
-      ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener', className: 'mono' }, reading.source_url)
+      ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, '조회 주소 열기')
       : '—']
   ];
   for (const [key, value] of rows) {
@@ -132,8 +145,9 @@ async function runLive() {
 // 인증 없는 검색 API는 IP당 분당 10회다. 연타로 스스로 제한을 부르지 않게 막는다.
 function cooldown(button) {
   let left = Math.ceil(SIGNAL.cooldown_ms / 1000);
+  const paint = () => { button.textContent = `다시 조회 · ${left}s`; };
   button.disabled = true;
-  button.textContent = `다시 조회 (${left})`;
+  paint();
   const id = setInterval(() => {
     left -= 1;
     if (left <= 0) {
@@ -142,13 +156,13 @@ function cooldown(button) {
       button.textContent = '지금 다시 조회';
       return;
     }
-    button.textContent = `다시 조회 (${left})`;
+    paint();
   }, 1000);
 }
 
 $('refetch').addEventListener('click', runLive);
 
-/* ── 보존된 일별 기록 ────────────────────────────── */
+/* ── HISTORY ─────────────────────────────────────── */
 
 function renderDaily() {
   const body = $('daily').querySelector('tbody');
@@ -161,30 +175,37 @@ function renderDaily() {
     return;
   }
 
+  const max = Math.max(...rows.map((r) => r.normalized_value), 1);
   rows.forEach((row, i) => {
     const prev = rows[i - 1];
     let delta = '—';
+    let cls = 'num';
     if (prev && prev.unit === row.unit) {
       const d = Math.round((row.normalized_value - prev.normalized_value) * 1e6) / 1e6;
       delta = `${signed(d)} ${row.unit}`;
+      cls = `num ${d > 0 ? 'up' : d < 0 ? 'down' : ''}`;
     }
     body.append(el('tr', {}, [
       el('td', { className: 'mono' }, row.record_date),
-      el('td', { className: 'num' }, String(row.normalized_value)),
+      el('td', { className: 'num big' }, el('span', {}, [
+        comma(row.normalized_value),
+        el('span', { className: 'bar', style: 'margin-top:5px' },
+          el('i', { style: `width:${Math.round((row.normalized_value / max) * 100)}%` }))
+      ])),
       el('td', {}, row.unit),
-      el('td', { className: 'num' }, delta),
+      el('td', { className: cls }, delta),
       el('td', {}, el('span', {}, [
         kstStamp(row.reading?.source_time) ?? '—',
         row.raw_excerpt?.target_date_kst ? el('span', { className: 'sub' }, `대상 ${row.raw_excerpt.target_date_kst}`) : null
       ])),
       el('td', {}, row.reading?.source_url
-        ? el('a', { href: row.reading.source_url, target: '_blank', rel: 'noreferrer noopener', className: 'mono' }, '조회 주소')
+        ? el('a', { href: row.reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, 'API')
         : '—')
     ]));
   });
 }
 
-/* ── 장애 재생 ───────────────────────────────────── */
+/* ── FALLBACK ────────────────────────────────────── */
 
 function button(label, onClick, className = '') {
   const node = el('button', { type: 'button', className }, label);
@@ -193,11 +214,10 @@ function button(label, onClick, className = '') {
 }
 
 function buildControls() {
-  const bar = $('controls');
-  bar.replaceChildren(
-    button('reset', () => resetLab()),
+  $('controls').replaceChildren(
     button('정상 3단계', () => playSequence('normal'), 'solid'),
-    el('span', { className: 'spacer' }),
+    button('reset', () => resetLab()),
+    el('span', { className: 'break' }),
     ...['timeout', 'auth', 'rate', 'offline', 'schema'].map((key) =>
       button(SEQUENCES[key].title, () => playSequence(key)))
   );
@@ -218,7 +238,6 @@ async function playOne(id) {
   busy = false;
 }
 
-let seqBusy = false;
 async function playSequence(key) {
   if (busy || seqBusy) return;
   seqBusy = true;
@@ -233,11 +252,11 @@ function renderLab() {
   const cmp = labState.last_comparison;
 
   $('state').replaceChildren(
-    stat('신선도', status ? (status.freshness === 'fresh' ? '새 값' : '오래된 값') : '—', true),
-    stat('오류 코드', status ? status.error_code : '—', true),
-    stat('일별 행', `${labState.daily_readings.length}건`),
-    stat('마지막 정상값', good ? `${good.normalized_value} ${good.unit}` : '없음', !good),
-    stat('어제 대비', cmp?.state === 'comparable' ? `${signed(cmp.signed)} ${cmp.unit}` : '—')
+    stat('FRESHNESS', status ? (status.freshness === 'fresh' ? '새 값' : '오래된 값') : '—', true),
+    stat('ERROR_CODE', status ? status.error_code : '—', true),
+    stat('ROWS', `${labState.daily_readings.length}`),
+    stat('LAST GOOD', good ? `${good.normalized_value}` : '없음', !good),
+    stat('DELTA', cmp?.state === 'comparable' ? signed(cmp.signed) : '—')
   );
 
   const wrap = $('replay-failure');
@@ -261,19 +280,16 @@ function renderLab() {
       : null;
     body.append(el('tr', {}, [
       el('td', { className: 'mono' }, row.record_date),
-      el('td', { className: 'num' }, String(row.normalized_value)),
+      el('td', { className: 'num big' }, String(row.normalized_value)),
       el('td', {}, row.unit),
-      el('td', { className: 'num' }, d === null ? '—' : `${signed(d)} ${row.unit}`),
+      el('td', { className: `num ${d > 0 ? 'up' : d < 0 ? 'down' : ''}` }, d === null ? '—' : `${signed(d)} ${row.unit}`),
       el('td', { className: 'mono' }, row.record_id)
     ]));
   });
 }
 
 function stat(label, value, small = false) {
-  return el('div', {}, [
-    el('dt', {}, label),
-    el('dd', { className: small ? 'small' : '' }, value)
-  ]);
+  return el('div', {}, [el('dt', {}, label), el('dd', { className: small ? 'sm' : '' }, value)]);
 }
 
 /* ── 시작 ────────────────────────────────────────── */
@@ -299,7 +315,7 @@ async function boot() {
     resetLab();
   } catch (error) {
     $('controls').replaceChildren(
-      el('p', { className: 'replay-note' }, `fixture를 불러오지 못했습니다: ${error.message}`)
+      el('p', { className: 'note' }, `fixture를 불러오지 못했습니다: ${error.message}`)
     );
   }
 }
