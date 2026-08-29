@@ -12,6 +12,10 @@
   --accent-ink: #5a52d6;
   --accent-soft: #f0efff;
   --accent-glow: rgba(112, 105, 232, 0.14);
+  /* 링크 전용 색. 차트/카드의 보라 액센트와는 따로 두고,
+     GitHub류 서비스에서 익숙한 파란 링크 톤을 살짝 빌려 왔다(정확한 GitHub 헥스코드는 아님) */
+  --link: #2f6fb0;
+  --link-ink: #24557f;
   --teal: #22b8a6;
   --teal-ink: #0c7a6d;
   --teal-soft: #e3f9f6;
@@ -45,9 +49,9 @@ body {
 }
 
 .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
-.mono { font-family: var(--label); font-weight: 700; letter-spacing: -0.01em; }
-a { color: var(--accent-ink); text-decoration: none; font-weight: 600; }
-a:hover { text-decoration: underline; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; font-size: 0.92em; letter-spacing: -0.01em; }
+a { color: var(--link); text-decoration: none; font-weight: 600; }
+a:hover { color: var(--link-ink); text-decoration: underline; }
 
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
 
@@ -133,8 +137,11 @@ a:hover { text-decoration: underline; }
   justify-content: center;
   align-items: baseline;
   gap: 12px;
+  width: 100%; /* max-width만으론 안 됨: .figure의 align-items:center 때문에
+                  이 줄이 자기 콘텐츠 크기로 쪼그라들어서, 실측 폭(clientWidth)이
+                  항상 콘텐츠 폭(scrollWidth)과 같아져 버려 넘침 감지가 무력화됐다.
+                  width:100%로 못박아야 실제 페이지 폭 기준으로 정확히 잰다. */
   min-width: 0;
-  max-width: 100%;
 }
 .sub-line {
   display: flex;
@@ -146,6 +153,7 @@ a:hover { text-decoration: underline; }
 }
 .figure .value {
   display: inline-block;
+  flex-shrink: 0;
   min-width: 0;
   max-width: 100%;
   /* 숫자 중간에서 줄바꿈되는 걸 원천 차단한다.
@@ -342,7 +350,8 @@ section { margin-top: 88px; }
 tr.row-highlight td { background: var(--accent-soft); }
 tr.row-highlight td:first-child { border-radius: 0 0 0 8px; }
 tr.row-highlight td:last-child { border-radius: 0 0 8px 0; }
-.sec-head { display: flex; align-items: baseline; gap: 11px; margin-bottom: 14px; }
+.sec-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 14px; }
+.sec-icon { align-self: center; color: var(--accent); flex-shrink: 0; }
 .sec-head h2 {
   margin: 0;
   font-family: var(--label);
