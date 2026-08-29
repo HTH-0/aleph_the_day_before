@@ -87,9 +87,17 @@ function renderLive() {
 
   const value = $('value');
   value.classList.toggle('is-stale', !fresh);
-  if (reading) value.textContent = comma(reading.normalized_value);
-  else if (status) value.textContent = '—';
-  else value.replaceChildren(el('span', { className: 'skel' }));
+  if (reading) {
+    const text = comma(reading.normalized_value);
+    value.textContent = text;
+    value.dataset.trueText = text;
+  } else if (status) {
+    value.textContent = '—';
+    delete value.dataset.trueText;
+  } else {
+    value.replaceChildren(el('span', { className: 'skel' }));
+    delete value.dataset.trueText;
+  }
   $('unit').textContent = reading ? reading.unit : '';
   fitValueLine();
 
@@ -517,6 +525,50 @@ function stat(label, value, small = false) {
   return el('div', {}, [el('dt', {}, label), el('dd', { className: small ? 'sm' : '' }, value)]);
 }
 
+/* ── 헤드라인 숫자: 마우스를 올리면 자릿수가 흩어졌다가 다시 진짜 값으로 맞춰진다 ──
+   comma(콤마)는 고정하고 숫자만 바꾸므로 tabular-nums 폭이 그대로 유지돼
+   실측 기반 폰트 보정(fitValueLine)과 부딪히지 않는다. */
+function wireValueScramble() {
+  const value = $('value');
+  if (!value) return;
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const digits = '0123456789';
+  let timer = null;
+
+  function scrambleTo(trueText, duration) {
+    clearTimeout(timer);
+    if (reduceMotion) {
+      value.textContent = trueText;
+      return;
+    }
+    const start = performance.now();
+    (function step() {
+      const elapsed = performance.now() - start;
+      if (elapsed >= duration) {
+        value.textContent = trueText;
+        return;
+      }
+      value.textContent = trueText.replace(/\d/g, () => digits[Math.floor(Math.random() * 10)]);
+      // 처음엔 빠르게 흩어지다 끝에 갈수록 느려지며 실제 값에 '착' 맞아 들어간다
+      const delay = 24 + (elapsed / duration) * 70;
+      timer = setTimeout(step, delay);
+    })();
+  }
+
+  value.addEventListener('mouseenter', () => {
+    const trueText = value.dataset.trueText;
+    if (!trueText || !/\d/.test(trueText)) return; // 값이 없거나 조회 중일 땐 흔들지 않는다
+    value.classList.add('is-scrambling');
+    scrambleTo(trueText, 480);
+  });
+  value.addEventListener('mouseleave', () => {
+    clearTimeout(timer);
+    if (value.dataset.trueText) value.textContent = value.dataset.trueText;
+    value.classList.remove('is-scrambling');
+  });
+}
+
 /* ── 로고: 마우스를 올리면 짧은 커밋 해시처럼 빠르게 굴러가다 REPO에 멈춘다 ── */
 function wireWordmark() {
   const roll = $('wm-roll');
@@ -557,6 +609,7 @@ function wireWordmark() {
 
 async function boot() {
   wireWordmark();
+  wireValueScramble();
   try {
     const response = await fetch('./data/daily.json', { cache: 'no-store' });
     if (response.ok) {
