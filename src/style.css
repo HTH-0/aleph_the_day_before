@@ -72,9 +72,11 @@ a:hover { text-decoration: underline; }
 }
 .wordmark {
   font-family: var(--display);
-  font-size: 19px;
+  font-size: 23px;
   font-weight: 800;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
+  display: inline-block;
+  transition: opacity 0.12s ease;
 }
 .wordmark i { color: var(--accent); font-style: normal; }
 
@@ -98,25 +100,28 @@ a:hover { text-decoration: underline; }
   box-sizing: border-box;
 }
 
-.side {
+.value-line {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  align-items: baseline;
   gap: 12px;
-  margin-top: 18px;
-  padding-right: 24px;
-  text-align: right;
+  min-width: 0;
+  max-width: 100%;
 }
-.side-top { display: flex; align-items: baseline; gap: 12px; justify-content: flex-end; }
+.sub-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
 .figure .value {
-  display: block;
-  width: 100%;
+  display: inline-block;
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
   font-family: var(--display);
-  /* 7자리(콤마 포함) 숫자가 어떤 화면에서도 컨테이너를 넘지 않도록 상한을 낮춰 잡았다 */
-  font-size: clamp(64px, 11vw, 230px);
+  /* 대부분의 화면에서 쓰는 '이상적' 크기. 실제로 넘칠 때만 JS가 딱 필요한 만큼 줄인다 */
+  font-size: clamp(72px, 18vw, 288px);
   font-weight: 800;
   line-height: 0.88;
   letter-spacing: -0.035em;
@@ -128,10 +133,12 @@ a:hover { text-decoration: underline; }
 }
 .figure .value.is-stale { background: linear-gradient(180deg, var(--muted-2), var(--muted-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .figure .unit {
+  flex-shrink: 0;
   font-family: var(--display);
-  font-size: clamp(24px, 3vw, 36px);
+  font-size: clamp(22px, 2.6vw, 32px);
   font-weight: 700;
   color: var(--muted-2);
+  padding-bottom: 0.15em;
 }
 .figure .delta {
   font-family: var(--display);
@@ -163,16 +170,14 @@ a:hover { text-decoration: underline; }
 .pill.stale { color: var(--warn-ink); background: var(--warn-bg); }
 
 .meta {
-  margin: 0;
+  margin: 10px 0 0;
   font-family: var(--label);
   font-size: 12.5px;
   font-weight: 500;
   color: var(--muted-2);
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 4px 16px;
-  text-align: right;
 }
 .meta span { white-space: nowrap; }
 
@@ -402,7 +407,7 @@ details[open].fallback > summary .arrow { transform: rotate(180deg); }
 @media (max-width: 760px) {
   .wrap { padding: 0 18px; }
   .foot-inner { padding: 18px 18px 26px; }
-  .side { padding-right: 0; }
+  .value-line { flex-wrap: wrap; }
   .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-body { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .detail-body dt { margin-top: 8px; }

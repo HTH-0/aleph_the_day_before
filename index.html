@@ -18,7 +18,7 @@
 <div class="spectrum"></div>
 <header class="top">
   <div class="top-inner">
-    <span class="wordmark">THE<i>_</i>DAY<i>_</i>BEFORE</span>
+    <span class="wordmark" id="wordmark">THE<i>_</i>DAY<i>_</i>BEFORE</span>
   </div>
 </header>
 
@@ -28,16 +28,17 @@
     <p class="eyebrow" id="eyebrow">어제 하루, GitHub에 새로 생긴 공개 저장소</p>
 
     <div class="figure">
-      <span class="value" id="value"><span class="skel"></span></span>
-
-      <div class="side">
-        <div class="side-top">
-          <span class="unit" id="unit"></span>
-          <span class="delta none" id="delta"></span>
-        </div>
-        <span class="pill fresh" id="pill">확인 중</span>
-        <p class="meta" id="meta"></p>
+      <div class="value-line">
+        <span class="value" id="value"><span class="skel"></span></span>
+        <span class="unit" id="unit"></span>
       </div>
+
+      <div class="sub-line">
+        <span class="delta none" id="delta"></span>
+        <span class="pill fresh" id="pill">확인 중</span>
+      </div>
+
+      <p class="meta" id="meta"></p>
     </div>
 
     <div id="failure"></div>

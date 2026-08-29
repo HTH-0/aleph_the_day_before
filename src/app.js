@@ -31,6 +31,37 @@ let labSteps = [];
 let busy = false;
 let seqBusy = false;
 
+/* ── 헤드라인 숫자 실측 맞춤 ─────────────────────────
+   CSS clamp()은 대부분의 화면에 맞는 '이상적' 크기를 잡아 두고,
+   실제로 컨테이너보다 넓게 렌더링될 때만 여기서 필요한 만큼만 줄인다.
+   자릿수가 늘어나거나 아주 넓은 모니터를 만나도 안전하게 맞는다. */
+function fitValueLine() {
+  const value = $('value');
+  const line = value.closest('.value-line');
+  if (!line) return;
+  value.style.fontSize = ''; // 자연 크기(clamp)로 리셋 후 다시 잰다
+  requestAnimationFrame(() => {
+    const available = line.clientWidth;
+    if (!available || line.scrollWidth <= available) return;
+    const naturalPx = parseFloat(getComputedStyle(value).fontSize) || 0;
+    if (!naturalPx) return;
+    const minPx = 40;
+    let size = naturalPx;
+    for (let i = 0; i < 6 && size > minPx; i += 1) {
+      const ratio = available / line.scrollWidth;
+      size = Math.max(minPx, Math.floor(size * ratio * 0.97));
+      value.style.fontSize = `${size}px`;
+      if (line.scrollWidth <= available) break;
+    }
+  });
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(fitValueLine, 120);
+});
+
 /* ── 헤드라인 ────────────────────────────────────── */
 
 function renderLive() {
@@ -45,6 +76,8 @@ function renderLive() {
   else if (status) value.textContent = '—';
   else value.replaceChildren(el('span', { className: 'skel' }));
   $('unit').textContent = reading ? reading.unit : '';
+  fitValueLine();
+
 
   const target = liveResult?.targetDate ?? reading?.raw_excerpt?.target_date_kst;
   $('eyebrow').replaceChildren(
@@ -390,9 +423,29 @@ function stat(label, value, small = false) {
   return el('div', {}, [el('dt', {}, label), el('dd', { className: small ? 'sm' : '' }, value)]);
 }
 
+/* ── 로고 이스터에그: 마우스를 올리면 THE_DAY_REPO로 잠깐 바뀐다 ── */
+function wireWordmark() {
+  const word = $('wordmark');
+  if (!word) return;
+  const before = word.innerHTML;
+  const repo = 'THE<i>_</i>DAY<i>_</i>REPO';
+  let timer = null;
+  const swap = (html) => {
+    clearTimeout(timer);
+    word.style.opacity = '0';
+    timer = setTimeout(() => {
+      word.innerHTML = html;
+      word.style.opacity = '1';
+    }, 100);
+  };
+  word.addEventListener('mouseenter', () => swap(repo));
+  word.addEventListener('mouseleave', () => swap(before));
+}
+
 /* ── 시작 ────────────────────────────────────────── */
 
 async function boot() {
+  wireWordmark();
   try {
     const response = await fetch('./data/daily.json', { cache: 'no-store' });
     if (response.ok) {
