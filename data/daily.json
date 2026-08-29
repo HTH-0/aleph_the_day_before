@@ -2,6 +2,63 @@
   "schema_version": "t04-daily-store-v1",
   "signal_id": "github-repos-created-daily",
   "record_timezone": "Asia/Seoul",
-  "generated_at": null,
-  "rows": []
+  "generated_at": "2026-08-28T10:59:44.710Z",
+  "rows": [
+    {
+      "record_id": "github-repos-created-daily:2026-08-28",
+      "signal_id": "github-repos-created-daily",
+      "record_date": "2026-08-28",
+      "normalized_value": 370103,
+      "unit": "개",
+      "first_fetched_at": "2026-08-28T10:59:44.392Z",
+      "last_fetched_at": "2026-08-28T10:59:44.392Z",
+      "update_count": 1,
+      "reading": {
+        "signal_id": "github-repos-created-daily",
+        "normalized_value": 370103,
+        "unit": "개",
+        "source_name": "GitHub REST API — 저장소 검색",
+        "source_url": "https://api.github.com/search/repositories?q=created%3A2026-08-27T00%3A00%3A00%2B09%3A00..2026-08-27T23%3A59%3A59%2B09%3A00&per_page=1",
+        "source_time": "2026-08-27T14:59:59.000Z",
+        "fetched_at": "2026-08-28T10:59:44.392Z",
+        "record_timezone": "Asia/Seoul",
+        "record_date": "2026-08-28"
+      },
+      "raw_excerpt": {
+        "total_count": 370103,
+        "incomplete_results": false,
+        "target_date_kst": "2026-08-27",
+        "created_range": "2026-08-27T00:00:00+09:00 .. 2026-08-27T23:59:59+09:00",
+        "rate_limit_remaining": 9
+      }
+    },
+    {
+      "record_id": "github-repos-created-daily:2026-08-29",
+      "signal_id": "github-repos-created-daily",
+      "record_date": "2026-08-29",
+      "normalized_value": 367258,
+      "unit": "개",
+      "first_fetched_at": "2026-08-29T00:51:29.000Z",
+      "last_fetched_at": "2026-08-29T00:51:29.000Z",
+      "update_count": 1,
+      "reading": {
+        "signal_id": "github-repos-created-daily",
+        "normalized_value": 367258,
+        "unit": "개",
+        "source_name": "GitHub REST API — 저장소 검색",
+        "source_url": "https://api.github.com/search/repositories?q=created%3A2026-08-28T00%3A00%3A00%2B09%3A00..2026-08-28T23%3A59%3A59%2B09%3A00&per_page=1",
+        "source_time": "2026-08-28T14:59:59.000Z",
+        "fetched_at": "2026-08-29T00:51:29.000Z",
+        "record_timezone": "Asia/Seoul",
+        "record_date": "2026-08-29"
+      },
+      "raw_excerpt": {
+        "total_count": 367258,
+        "incomplete_results": false,
+        "target_date_kst": "2026-08-28",
+        "created_range": "2026-08-28T00:00:00+09:00 .. 2026-08-28T23:59:59+09:00",
+        "rate_limit_remaining": null
+      }
+    }
+  ]
 }
