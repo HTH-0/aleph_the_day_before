@@ -31,35 +31,48 @@ let labSteps = [];
 let busy = false;
 let seqBusy = false;
 
-/* ── 헤드라인 숫자 실측 맞춤 ─────────────────────────
-   CSS clamp()은 대부분의 화면에 맞는 '이상적' 크기를 잡아 두고,
-   실제로 컨테이너보다 넓게 렌더링될 때만 여기서 필요한 만큼만 줄인다.
-   자릿수가 늘어나거나 아주 넓은 모니터를 만나도 안전하게 맞는다. */
+/* ── 실측 맞춤 (헤드라인 숫자 + 통계 카드 숫자 공용) ─────
+   CSS clamp()은 대부분 화면에 맞는 '이상적' 크기를 잡아 두고,
+   실제로 컨테이너보다 넓게 렌더링될 때만 필요한 만큼만 줄인다.
+   stat-row는 overflow:hidden이라 안 맞으면 조용히 잘리므로,
+   숫자뿐 아니라 카드 쪽에도 같은 안전장치를 건다. */
+function fitText(target, container, minRatio = 0.5) {
+  target.style.fontSize = '';
+  requestAnimationFrame(() => {
+    const available = container.clientWidth;
+    if (!available || container.scrollWidth <= available) return;
+    const naturalPx = parseFloat(getComputedStyle(target).fontSize) || 0;
+    if (!naturalPx) return;
+    const minPx = naturalPx * minRatio;
+    let size = naturalPx;
+    for (let i = 0; i < 6 && size > minPx; i += 1) {
+      const ratio = available / container.scrollWidth;
+      size = Math.max(minPx, Math.floor(size * ratio * 0.97));
+      target.style.fontSize = `${size}px`;
+      if (container.scrollWidth <= available) break;
+    }
+  });
+}
+
 function fitValueLine() {
   const value = $('value');
   const line = value.closest('.value-line');
-  if (!line) return;
-  value.style.fontSize = ''; // 자연 크기(clamp)로 리셋 후 다시 잰다
-  requestAnimationFrame(() => {
-    const available = line.clientWidth;
-    if (!available || line.scrollWidth <= available) return;
-    const naturalPx = parseFloat(getComputedStyle(value).fontSize) || 0;
-    if (!naturalPx) return;
-    const minPx = 40;
-    let size = naturalPx;
-    for (let i = 0; i < 6 && size > minPx; i += 1) {
-      const ratio = available / line.scrollWidth;
-      size = Math.max(minPx, Math.floor(size * ratio * 0.97));
-      value.style.fontSize = `${size}px`;
-      if (line.scrollWidth <= available) break;
-    }
+  if (line) fitText(value, line, 0.35);
+}
+
+function fitStatFigures() {
+  document.querySelectorAll('.stat-figure').forEach((figure) => {
+    if (figure.parentElement) fitText(figure, figure.parentElement, 0.55);
   });
 }
 
 let resizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(fitValueLine, 120);
+  resizeTimer = setTimeout(() => {
+    fitValueLine();
+    fitStatFigures();
+  }, 120);
 });
 
 /* ── 헤드라인 ────────────────────────────────────── */
@@ -212,7 +225,10 @@ function cell(label, value, unit, sub, tone = '') {
   return el('div', { className: `stat-cell ${tone}` }, [
     el('dt', {}, label),
     el('dd', {}, [
-      el('span', { className: 'stat-figure' }, [value, unit ? ` ${unit}` : '']),
+      el('span', { className: 'stat-figure' }, [
+        value,
+        unit ? el('span', { className: 'stat-unit' }, ` ${unit}`) : ''
+      ]),
       sub ? el('small', {}, sub) : null
     ])
   ]);
@@ -256,12 +272,11 @@ function renderChart(rows) {
   const y = (v) => pad.top + ((hi - v) / (hi - lo)) * (H - pad.top - pad.bottom);
   const base = H - pad.bottom;
 
-  // 촘촘한 가로 격자 5줄 + 눈금값
+  // 촘촘한 가로 격자 5줄. 값 자체는 각 포인트 위에 이미 표시되므로
+  // 눈금 숫자는 그리지 않는다 — 겹칠 여지를 아예 없앤다.
   for (let i = 0; i <= 4; i += 1) {
-    const gv = lo + ((hi - lo) * (4 - i)) / 4;
     const gy = pad.top + (i * (H - pad.top - pad.bottom)) / 4;
     node.append(svg('line', { class: `grid${i === 4 ? ' zero' : ''}`, x1: pad.left, y1: gy, x2: W - pad.right, y2: gy }));
-    node.append(svg('text', { class: 'axis', x: pad.left, y: gy - 6 }, comma(Math.round(gv))));
   }
 
   if (rows.length > 1) {
@@ -292,6 +307,7 @@ function renderChart(rows) {
 function renderDaily() {
   const rows = [...store.rows].sort((a, b) => a.record_date.localeCompare(b.record_date));
   renderStats(rows);
+  fitStatFigures();
   renderChart(rows);
 
   const body = $('daily').querySelector('tbody');
@@ -423,29 +439,9 @@ function stat(label, value, small = false) {
   return el('div', {}, [el('dt', {}, label), el('dd', { className: small ? 'sm' : '' }, value)]);
 }
 
-/* ── 로고 이스터에그: 마우스를 올리면 THE_DAY_REPO로 잠깐 바뀐다 ── */
-function wireWordmark() {
-  const word = $('wordmark');
-  if (!word) return;
-  const before = word.innerHTML;
-  const repo = 'THE<i>_</i>DAY<i>_</i>REPO';
-  let timer = null;
-  const swap = (html) => {
-    clearTimeout(timer);
-    word.style.opacity = '0';
-    timer = setTimeout(() => {
-      word.innerHTML = html;
-      word.style.opacity = '1';
-    }, 100);
-  };
-  word.addEventListener('mouseenter', () => swap(repo));
-  word.addEventListener('mouseleave', () => swap(before));
-}
-
 /* ── 시작 ────────────────────────────────────────── */
 
 async function boot() {
-  wireWordmark();
   try {
     const response = await fetch('./data/daily.json', { cache: 'no-store' });
     if (response.ok) {
