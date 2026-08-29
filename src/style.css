@@ -113,15 +113,20 @@ a:hover { text-decoration: underline; }
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 10px;
+  margin-left: auto; /* flex 컬럼(.figure) 안에서 우측 끝으로 밀어낸다 */
+  text-align: right;
 }
 .figure .value {
   display: inline-block;
   min-width: 0;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  /* 숫자 중간에서 줄바꿈되는 걸 원천 차단한다.
+     이게 없으면 박스가 좁아졌을 때 텍스트가 잘리는 대신 두 줄로 쪼개져 버린다. */
+  white-space: nowrap;
   font-family: var(--display);
-  /* 대부분의 화면에서 쓰는 '이상적' 크기. 실제로 넘칠 때만 JS가 딱 필요한 만큼 줄인다 */
-  font-size: clamp(72px, 18vw, 288px);
+  /* 대부분의 화면에서 이미 안전하게 맞는 보수적인 상한.
+     그래도 넘치면(초광폭 모니터 등) JS가 실측해서 한 번 더 줄인다. */
+  font-size: clamp(64px, 16vw, 240px);
   font-weight: 800;
   line-height: 0.88;
   letter-spacing: -0.035em;
