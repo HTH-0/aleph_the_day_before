@@ -114,7 +114,7 @@ function renderLive() {
 
   const pill = $('pill');
   pill.className = `pill ${fresh ? 'fresh' : 'stale'}`;
-  pill.textContent = fresh ? '새 값' : status ? `오래된 값 · ${status.error_code}` : '확인 중';
+  pill.textContent = fresh ? '정상 수집됨' : status ? `지연 중 · ${status.error_code}` : '확인 중';
 
   // C06~C09: 출처 · 출처 관측 시각 · 조회 시각 · 기준 시간대를 상시 노출.
   const meta = $('meta');
@@ -491,9 +491,46 @@ function stat(label, value, small = false) {
   return el('div', {}, [el('dt', {}, label), el('dd', { className: small ? 'sm' : '' }, value)]);
 }
 
+/* ── 로고: 마우스를 올리면 짧은 커밋 해시처럼 빠르게 굴러가다 REPO에 멈춘다 ── */
+function wireWordmark() {
+  const roll = $('wm-roll');
+  const word = $('wordmark');
+  if (!roll || !word) return;
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const hex = '0123456789abcdef';
+  const randomHex = (len) =>
+    Array.from({ length: len }, () => hex[Math.floor(Math.random() * 16)]).join('');
+
+  let timer = null;
+  function rollTo(target, duration) {
+    clearTimeout(timer);
+    if (reduceMotion) {
+      roll.textContent = target;
+      return;
+    }
+    const start = performance.now();
+    (function step() {
+      const elapsed = performance.now() - start;
+      if (elapsed >= duration) {
+        roll.textContent = target;
+        return;
+      }
+      roll.textContent = randomHex(6);
+      // 처음엔 빠르게 굴리다가 끝에 갈수록 느려져서 '착' 멈추는 느낌을 준다
+      const delay = 26 + (elapsed / duration) * 90;
+      timer = setTimeout(step, delay);
+    })();
+  }
+
+  word.addEventListener('mouseenter', () => rollTo('REPO', 480));
+  word.addEventListener('mouseleave', () => rollTo('BEFORE', 260));
+}
+
 /* ── 시작 ────────────────────────────────────────── */
 
 async function boot() {
+  wireWordmark();
   try {
     const response = await fetch('./data/daily.json', { cache: 'no-store' });
     if (response.ok) {

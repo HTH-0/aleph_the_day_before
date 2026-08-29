@@ -69,6 +69,7 @@ a:hover { text-decoration: underline; }
   padding: 20px 24px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 .wordmark {
   font-family: var(--display);
@@ -90,12 +91,12 @@ a:hover { text-decoration: underline; }
   transition: opacity 0.18s ease, width 0.18s ease, margin-right 0.18s ease, transform 0.18s ease;
 }
 .wordmark:hover .wm-mark { opacity: 1; width: 15px; margin-right: 7px; transform: translateX(0); }
-.wm-swap { position: relative; display: inline-block; }
-.wm-word { transition: opacity 0.2s ease; }
-.wm-before { position: relative; opacity: 1; }
-.wm-repo { position: absolute; left: 0; top: 0; opacity: 0; color: var(--accent-ink); }
-.wordmark:hover .wm-before { opacity: 0; }
-.wordmark:hover .wm-repo { opacity: 1; }
+.wm-roll {
+  display: inline-block;
+  min-width: 4.6ch;
+  font-variant-numeric: tabular-nums;
+}
+.wordmark:hover .wm-roll { color: var(--accent-ink); }
 
 /* ── 헤드라인 ────────────────────────────────────── */
 .hero {
