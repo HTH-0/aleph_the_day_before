@@ -178,7 +178,10 @@ function renderStats(rows) {
 function cell(label, value, unit, sub, tone = '') {
   return el('div', { className: `stat-cell ${tone}` }, [
     el('dt', {}, label),
-    el('dd', {}, [value, unit ? ` ${unit}` : '', sub ? el('small', {}, sub) : null])
+    el('dd', {}, [
+      el('span', { className: 'stat-figure' }, [value, unit ? ` ${unit}` : '']),
+      sub ? el('small', {}, sub) : null
+    ])
   ]);
 }
 
