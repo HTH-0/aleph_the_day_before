@@ -21,6 +21,8 @@ const svg = (tag, attrs = {}, text) => {
 };
 const comma = (n) => Number(n).toLocaleString('ko-KR');
 const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${comma(Math.abs(n))}`;
+// 표에는 같은 행에 날짜 열이 이미 있어서, 시각 열은 날짜를 반복하지 않고 시:분:초만 남긴다
+const kstTime = (iso) => kstStamp(iso)?.slice(11, 19) ?? '—';
 
 let store = emptyStore(SIGNAL.signal_id);
 let liveResult = null;
@@ -148,6 +150,7 @@ function renderDetail(reading) {
     ['집계 완전성', liveResult?.outcome === 'success'
       ? (liveResult.incomplete ? 'incomplete_results: true — 실제보다 적을 수 있음' : 'incomplete_results: false')
       : '—'],
+    ['왜 값이 바뀌나요', 'GitHub 검색 인덱스는 실시간으로 갱신됩니다. 같은 날짜를 다시 조회해도 그 사이 저장소가 삭제·비공개 전환되면 답이 달라질 수 있습니다.'],
     ['남은 호출', typeof liveResult?.rateRemaining === 'number' ? `${liveResult.rateRemaining} / 10 per min` : '—'],
     ['호출 주소', reading
       ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, reading.source_url)
@@ -332,7 +335,7 @@ function renderDaily() {
       el('td', { className: 'num big' }, comma(row.normalized_value)),
       el('td', {}, row.unit),
       el('td', { className: cls }, delta),
-      el('td', { className: 'mono' }, kstStamp(row.reading?.source_time) ?? '—'),
+      el('td', { className: 'mono' }, kstTime(row.reading?.source_time)),
       el('td', {}, row.reading?.source_url
         ? el('a', { href: row.reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, 'API')
         : '—')
@@ -346,6 +349,8 @@ function renderDaily() {
    칸 수 = 기록된 날 수. 빈 칸을 미리 그리지 않는다.
    색은 그 날의 값이 지금까지의 최저~최고 사이 어디쯤인지로 정한다.
    1건뿐이면 비교 대상이 없으니 중간 톤 하나로 둔다. */
+const WEEKDAY_LABELS = ['', '월', '', '수', '', '금', ''];
+
 function renderStrip(rows) {
   const strip = $('history-strip');
   const count = $('strip-count');
@@ -362,21 +367,42 @@ function renderStrip(rows) {
   const max = Math.max(...values);
   const span = max - min;
 
+  // GitHub 잔디와 같은 구조: 세로 7칸(요일), 가로는 주 단위 칼럼.
+  // 실제로 기록된 날에만 칸을 그린다 — 기록 없는 날은 빈칸으로 남긴다(칸을 만들지 않는다).
+  const first = new Date(`${rows[0].record_date}T00:00:00Z`);
+  const firstSunday = new Date(first);
+  firstSunday.setUTCDate(first.getUTCDate() - first.getUTCDay());
+
+  // 요일 라벨(월/수/금)
+  WEEKDAY_LABELS.forEach((label, i) => {
+    if (!label) return;
+    const node = el('span', { className: 'strip-wd' }, label);
+    node.style.gridRow = String(i + 1);
+    node.style.gridColumn = '1';
+    strip.append(node);
+  });
+
   rows.forEach((row) => {
     const level = span === 0
       ? 3
       : Math.min(4, 1 + Math.floor(((row.normalized_value - min) / span) * 3.999));
-    const prevIdx = rows.indexOf(row) - 1;
-    const prev = prevIdx >= 0 ? rows[prevIdx] : null;
+    const idx = rows.indexOf(row);
+    const prev = idx > 0 ? rows[idx - 1] : null;
     const deltaText = prev && prev.unit === row.unit
       ? `${signed(Math.round((row.normalized_value - prev.normalized_value) * 1e6) / 1e6)} ${row.unit}`
       : '기준일';
+
+    const d = new Date(`${row.record_date}T00:00:00Z`);
+    const weekday = d.getUTCDay(); // 0=일 ~ 6=토
+    const week = Math.floor((d - firstSunday) / (7 * 86400000));
 
     const cellNode = el('button', {
       type: 'button',
       className: `strip-cell lvl-${level}`,
       title: `${row.record_date} · ${comma(row.normalized_value)} ${row.unit} · ${deltaText}`
     });
+    cellNode.style.gridRow = String(weekday + 1);
+    cellNode.style.gridColumn = String(week + 2); // 1번 칼럼은 요일 라벨용
     cellNode.setAttribute('aria-label', `${row.record_date} ${comma(row.normalized_value)} ${row.unit}`);
     cellNode.addEventListener('mouseenter', () => highlightRow(row.record_date, true));
     cellNode.addEventListener('mouseleave', () => highlightRow(row.record_date, false));
