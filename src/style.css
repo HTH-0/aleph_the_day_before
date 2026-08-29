@@ -171,8 +171,12 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  cursor: default;
+  transition: transform 0.15s ease;
 }
+.figure .value.is-scrambling { transform: scale(1.012); }
 .figure .value.is-stale { background: linear-gradient(180deg, var(--muted-2), var(--muted-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.figure .value.is-stale.is-scrambling { transform: none; }
 .figure .unit {
   flex-shrink: 0;
   font-family: var(--display);
