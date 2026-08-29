@@ -310,6 +310,37 @@ svg.chart { display: block; width: 100%; height: auto; }
 
 /* ── 구획 ────────────────────────────────────────── */
 section { margin-top: 88px; }
+
+/* ── 히스토리 스트립 (누적 기록 잔디) ─────────────────
+   칸 수는 항상 '실제로 기록된 날 수'와 같다. 빈 칸을 미리 그리지 않으므로
+   언제 봐도 꽉 찬 상태로 보인다. 색은 GitHub 잔디의 5단계 초록을 그대로 쓴다. */
+.strip-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.strip-label { font-family: var(--label); font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.strip-count { font-family: var(--label); font-size: 12px; font-weight: 600; color: var(--muted-2); }
+
+.history-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 22px; }
+.strip-cell {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  background: #ebedf0;
+  cursor: pointer;
+  transition: transform 0.1s ease, outline-color 0.1s ease;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+}
+.strip-cell:hover, .strip-cell:focus-visible {
+  transform: scale(1.28);
+  outline-color: var(--accent);
+}
+.strip-cell.lvl-1 { background: #9be9a8; }
+.strip-cell.lvl-2 { background: #40c463; }
+.strip-cell.lvl-3 { background: #30a14e; }
+.strip-cell.lvl-4 { background: #216e39; }
+
+tr.row-highlight td { background: var(--accent-soft); }
+tr.row-highlight td:first-child { border-radius: 0 0 0 8px; }
+tr.row-highlight td:last-child { border-radius: 0 0 8px 0; }
 .sec-head { display: flex; align-items: baseline; gap: 11px; margin-bottom: 14px; }
 .sec-head h2 {
   margin: 0;
@@ -323,7 +354,7 @@ section { margin-top: 88px; }
 /* ── 표 ──────────────────────────────────────────── */
 .scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 15px; }
-th, td { text-align: left; padding: 13px 15px 13px 0; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+th, td { text-align: left; padding: 13px 15px 13px 0; border-bottom: 1px solid var(--line-soft); white-space: nowrap; transition: background 0.12s ease; }
 thead th {
   font-family: var(--label);
   font-size: 12.5px;

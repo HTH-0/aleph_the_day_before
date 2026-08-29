@@ -309,6 +309,7 @@ function renderDaily() {
   renderStats(rows);
   fitStatFigures();
   renderChart(rows);
+  renderStrip(rows);
 
   const body = $('daily').querySelector('tbody');
   body.replaceChildren();
@@ -326,7 +327,7 @@ function renderDaily() {
       delta = `${signed(d)} ${row.unit}`;
       cls = `num ${d > 0 ? 'up' : d < 0 ? 'down' : ''}`;
     }
-    body.append(el('tr', {}, [
+    const tr = el('tr', {}, [
       el('td', { className: 'mono' }, row.record_date),
       el('td', { className: 'num big' }, comma(row.normalized_value)),
       el('td', {}, row.unit),
@@ -335,8 +336,59 @@ function renderDaily() {
       el('td', {}, row.reading?.source_url
         ? el('a', { href: row.reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, 'API')
         : '—')
-    ]));
+    ]);
+    tr.dataset.date = row.record_date; // el()의 Object.assign은 dataset을 직접 못 받아 따로 지정한다
+    body.append(tr);
   });
+}
+
+/* ── 히스토리 스트립 ─────────────────────────────────
+   칸 수 = 기록된 날 수. 빈 칸을 미리 그리지 않는다.
+   색은 그 날의 값이 지금까지의 최저~최고 사이 어디쯤인지로 정한다.
+   1건뿐이면 비교 대상이 없으니 중간 톤 하나로 둔다. */
+function renderStrip(rows) {
+  const strip = $('history-strip');
+  const count = $('strip-count');
+  strip.replaceChildren();
+
+  if (!rows.length) {
+    count.textContent = '';
+    return;
+  }
+  count.textContent = `${rows.length}일째 기록 중`;
+
+  const values = rows.map((r) => r.normalized_value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+
+  rows.forEach((row) => {
+    const level = span === 0
+      ? 3
+      : Math.min(4, 1 + Math.floor(((row.normalized_value - min) / span) * 3.999));
+    const prevIdx = rows.indexOf(row) - 1;
+    const prev = prevIdx >= 0 ? rows[prevIdx] : null;
+    const deltaText = prev && prev.unit === row.unit
+      ? `${signed(Math.round((row.normalized_value - prev.normalized_value) * 1e6) / 1e6)} ${row.unit}`
+      : '기준일';
+
+    const cellNode = el('button', {
+      type: 'button',
+      className: `strip-cell lvl-${level}`,
+      title: `${row.record_date} · ${comma(row.normalized_value)} ${row.unit} · ${deltaText}`
+    });
+    cellNode.setAttribute('aria-label', `${row.record_date} ${comma(row.normalized_value)} ${row.unit}`);
+    cellNode.addEventListener('mouseenter', () => highlightRow(row.record_date, true));
+    cellNode.addEventListener('mouseleave', () => highlightRow(row.record_date, false));
+    cellNode.addEventListener('focus', () => highlightRow(row.record_date, true));
+    cellNode.addEventListener('blur', () => highlightRow(row.record_date, false));
+    strip.append(cellNode);
+  });
+}
+
+function highlightRow(date, on) {
+  const row = document.querySelector(`tr[data-date="${date}"]`);
+  if (row) row.classList.toggle('row-highlight', on);
 }
 
 /* ── FALLBACK ────────────────────────────────────── */
