@@ -90,21 +90,33 @@ a:hover { text-decoration: underline; }
 }
 .eyebrow b { color: var(--accent-ink); font-weight: 800; }
 
-.figure { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding-right: 24px; }
+.figure {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 
 .side {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 12px;
-  padding-bottom: clamp(10px, 1.6vw, 20px);
-  margin-left: auto;
+  margin-top: 18px;
+  padding-right: 24px;
   text-align: right;
 }
 .side-top { display: flex; align-items: baseline; gap: 12px; justify-content: flex-end; }
 .figure .value {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-family: var(--display);
-  font-size: clamp(120px, 21vw, 320px);
+  /* 7자리(콤마 포함) 숫자가 어떤 화면에서도 컨테이너를 넘지 않도록 상한을 낮춰 잡았다 */
+  font-size: clamp(64px, 11vw, 230px);
   font-weight: 800;
   line-height: 0.88;
   letter-spacing: -0.035em;
@@ -117,7 +129,7 @@ a:hover { text-decoration: underline; }
 .figure .value.is-stale { background: linear-gradient(180deg, var(--muted-2), var(--muted-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .figure .unit {
   font-family: var(--display);
-  font-size: clamp(26px, 3.4vw, 40px);
+  font-size: clamp(24px, 3vw, 36px);
   font-weight: 700;
   color: var(--muted-2);
 }
@@ -126,7 +138,7 @@ a:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: clamp(20px, 2.6vw, 30px);
+  font-size: clamp(18px, 2.4vw, 28px);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -390,11 +402,7 @@ details[open].fallback > summary .arrow { transform: rotate(180deg); }
 @media (max-width: 760px) {
   .wrap { padding: 0 18px; }
   .foot-inner { padding: 18px 18px 26px; }
-  .figure { flex-direction: column; align-items: flex-start; padding-right: 0; }
-  .side { width: 100%; margin-left: 0; padding-bottom: 0; }
-  .stat-cell { text-align: left; }
-  .stat-cell dt { text-align: left; }
-  .stat-cell dd { align-items: flex-start; }
+  .side { padding-right: 0; }
   .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-body { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .detail-body dt { margin-top: 8px; }
