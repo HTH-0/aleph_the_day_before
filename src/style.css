@@ -154,6 +154,44 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   flex-wrap: wrap;
   margin-top: 14px;
 }
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--teal-soft);
+  color: var(--teal-ink);
+  font-family: var(--label);
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: help;
+  position: relative;
+}
+.info-badge:focus-visible { outline: 2px solid var(--teal-ink); outline-offset: 2px; }
+.info-tip {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--label);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 9px 11px;
+  border-radius: 8px;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 5;
+}
+.info-badge:hover .info-tip,
+.info-badge:focus-visible .info-tip { opacity: 1; }
 .refresh-btn {
   display: inline-flex;
   align-items: center;
@@ -196,9 +234,9 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   cursor: default;
   transition: transform 0.15s ease;
 }
-.figure .value.is-scrambling { transform: scale(1.012); }
+.figure .value.is-counting { transform: scale(1.015); }
 .figure .value.is-stale { background: linear-gradient(180deg, var(--muted-2), var(--muted-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.figure .value.is-stale.is-scrambling { transform: none; }
+.figure .value.is-stale.is-counting { transform: none; }
 .figure .unit {
   flex-shrink: 0;
   font-family: var(--display);

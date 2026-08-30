@@ -158,7 +158,6 @@ function renderDetail(reading) {
     ['집계 완전성', liveResult?.outcome === 'success'
       ? (liveResult.incomplete ? 'incomplete_results: true — 실제보다 적을 수 있음' : 'incomplete_results: false')
       : '—'],
-    ['왜 값이 바뀌나요', 'GitHub 검색 인덱스는 실시간으로 갱신됩니다. 같은 날짜를 다시 조회해도 그 사이 저장소가 삭제·비공개 전환되면 답이 달라질 수 있습니다.'],
     ['남은 호출', typeof liveResult?.rateRemaining === 'number' ? `${liveResult.rateRemaining} / 10 per min` : '—'],
     ['호출 주소', reading
       ? el('a', { href: reading.source_url, target: '_blank', rel: 'noreferrer noopener' }, reading.source_url)
@@ -201,25 +200,29 @@ async function runLive() {
   renderLive();
 }
 
-/* ── 다시 조회 버튼: 진짜 재조회 동안 숫자가 스크램블(로딩 표시)되고,
-   응답이 오면 실제 값에 맞춰진다. 기록값(HISTORY)과 다르면 안내를 띄운다.
+/* ── 다시 조회 버튼: 실제 재조회가 끝나면, 이전 값에서 새 값까지
+   숫자 자체가 감속 곡선을 그리며 세어 올라간다(또는 내려간다).
    저장된 data/daily.json은 절대 건드리지 않는다 — 화면(CURRENT)에만 반영된다. */
-let refreshLoopTimer = null;
 let refreshBusy = false;
 
-function startRefreshScramble() {
-  const value = $('value');
-  const trueText = value.dataset.trueText || value.textContent;
-  const digits = '0123456789';
-  value.classList.add('is-scrambling');
-  (function tick() {
-    value.textContent = trueText.replace(/\d/g, () => digits[Math.floor(Math.random() * 10)]);
-    refreshLoopTimer = setTimeout(tick, 70);
-  })();
-}
-function stopRefreshScramble() {
-  clearTimeout(refreshLoopTimer);
-  $('value').classList.remove('is-scrambling');
+function countUpValue(el, from, to, duration = 480) {
+  if (from === to || Number.isNaN(from)) return;
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion) return;
+  el.classList.add('is-counting');
+  const start = performance.now();
+  (function step(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out — 끝에 갈수록 느려지며 정확히 멈춘다
+    const val = Math.round(from + (to - from) * eased);
+    el.textContent = comma(val);
+    if (t < 1) {
+      requestAnimationFrame(step);
+    } else {
+      el.textContent = comma(to);
+      el.classList.remove('is-counting');
+    }
+  })(performance.now());
 }
 
 function cooldownRefresh(btn) {
@@ -242,15 +245,20 @@ async function runRefresh() {
   if (refreshBusy) return;
   refreshBusy = true;
   const btn = $('refresh-btn');
+  const value = $('value');
   btn.classList.add('is-loading');
-  startRefreshScramble();
+  const prevText = value.dataset.trueText;
+  const prevNum = prevText ? Number(prevText.replace(/,/g, '')) : null;
 
   liveResult = await fetchLive();
   liveState = applyLiveResult(stateFromStore(store), liveResult);
 
-  stopRefreshScramble();
   btn.classList.remove('is-loading');
-  renderLive();
+  renderLive(); // 실패 안내·메타·상세를 포함해 화면 전체를 정상적으로 갱신한다
+
+  if (liveResult.outcome === 'success' && prevNum !== null) {
+    countUpValue(value, prevNum, liveResult.reading.normalized_value);
+  }
 
   cooldownRefresh(btn);
   refreshBusy = false;
