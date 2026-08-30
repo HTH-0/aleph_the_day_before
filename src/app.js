@@ -80,7 +80,6 @@ window.addEventListener('resize', () => {
 /* ── 헤드라인 ────────────────────────────────────── */
 
 function renderLive() {
-  $('sync-notice')?.replaceChildren();
   const status = liveState.status;
   const fresh = status?.freshness === 'fresh';
   const good = lastGoodRow(liveState);
@@ -223,21 +222,6 @@ function stopRefreshScramble() {
   $('value').classList.remove('is-scrambling');
 }
 
-function renderSyncNotice(reading, storedRow) {
-  const box = $('sync-notice');
-  box.replaceChildren();
-  if (!reading || !storedRow) return;
-  if (storedRow.record_date !== reading.record_date) return; // 비교 대상 날짜가 다르면 비교하지 않는다
-  if (storedRow.normalized_value === reading.normalized_value) return; // 같으면 안내할 게 없다
-  const diff = Math.round((reading.normalized_value - storedRow.normalized_value) * 1e6) / 1e6;
-  box.append(el('div', { className: 'notice' }, [
-    el('h3', {}, '관측값 변동 안내'),
-    el('p', {}, 'GitHub API 인덱스 특성상 동일 날짜라도 조회 시점에 따라 저장소의 삭제·비공개 상태가 반영되어 집계 수치가 달라질 수 있습니다.'),
-    el('p', { className: 'diff-line' },
-      `지금 조회 ${comma(reading.normalized_value)}개 · 기록된 값 ${comma(storedRow.normalized_value)}개 (${storedRow.record_date}) · 차이 ${signed(diff)}개`)
-  ]));
-}
-
 function cooldownRefresh(btn) {
   let left = Math.ceil(SIGNAL.cooldown_ms / 1000);
   btn.disabled = true;
@@ -267,11 +251,6 @@ async function runRefresh() {
   stopRefreshScramble();
   btn.classList.remove('is-loading');
   renderLive();
-
-  if (liveResult.outcome === 'success') {
-    const storedRow = lastGoodRow(stateFromStore(store)); // data/daily.json 기준 — 실시간 재조회로 안 바뀐다
-    renderSyncNotice(liveResult.reading, storedRow);
-  }
 
   cooldownRefresh(btn);
   refreshBusy = false;
@@ -601,52 +580,6 @@ function stat(label, value, small = false) {
   return el('div', {}, [el('dt', {}, label), el('dd', { className: small ? 'sm' : '' }, value)]);
 }
 
-/* ── 헤드라인 숫자: 마우스를 올리면 자릿수가 흩어졌다가 다시 진짜 값으로 맞춰진다 ──
-   comma(콤마)는 고정하고 숫자만 바꾸므로 tabular-nums 폭이 그대로 유지돼
-   실측 기반 폰트 보정(fitValueLine)과 부딪히지 않는다. */
-function wireValueScramble() {
-  const value = $('value');
-  if (!value) return;
-
-  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const digits = '0123456789';
-  let timer = null;
-
-  function scrambleTo(trueText, duration) {
-    clearTimeout(timer);
-    if (reduceMotion) {
-      value.textContent = trueText;
-      return;
-    }
-    const start = performance.now();
-    (function step() {
-      const elapsed = performance.now() - start;
-      if (elapsed >= duration) {
-        value.textContent = trueText;
-        return;
-      }
-      value.textContent = trueText.replace(/\d/g, () => digits[Math.floor(Math.random() * 10)]);
-      // 처음엔 빠르게 흩어지다 끝에 갈수록 느려지며 실제 값에 '착' 맞아 들어간다
-      const delay = 24 + (elapsed / duration) * 70;
-      timer = setTimeout(step, delay);
-    })();
-  }
-
-  value.addEventListener('mouseenter', () => {
-    if (refreshBusy) return; // 실제 재조회 중이면 그쪽 로딩 애니메이션을 방해하지 않는다
-    const trueText = value.dataset.trueText;
-    if (!trueText || !/\d/.test(trueText)) return; // 값이 없거나 조회 중일 땐 흔들지 않는다
-    value.classList.add('is-scrambling');
-    scrambleTo(trueText, 480);
-  });
-  value.addEventListener('mouseleave', () => {
-    clearTimeout(timer);
-    if (refreshBusy) return; // 재조회 로딩 중엔 그대로 둔다
-    if (value.dataset.trueText) value.textContent = value.dataset.trueText;
-    value.classList.remove('is-scrambling');
-  });
-}
-
 /* ── 로고: 마우스를 올리면 짧은 커밋 해시처럼 빠르게 굴러가다 REPO에 멈춘다 ── */
 function wireWordmark() {
   const roll = $('wm-roll');
@@ -687,7 +620,6 @@ function wireWordmark() {
 
 async function boot() {
   wireWordmark();
-  wireValueScramble();
   $('refresh-btn')?.addEventListener('click', runRefresh);
   try {
     const response = await fetch('./data/daily.json', { cache: 'no-store' });

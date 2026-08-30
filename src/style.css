@@ -84,16 +84,6 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   align-items: center;
 }
 .wordmark i { color: var(--accent); font-style: normal; }
-.hdr-hint {
-  display: inline-block;
-  font-size: 12px;
-  color: var(--accent);
-  opacity: 0;
-  transform: scale(0.6);
-  margin-right: 2px;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.top:hover .hdr-hint { opacity: 1; transform: scale(1); }
 
 .wm-mark {
   color: var(--accent);
@@ -105,12 +95,14 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   transform: translateX(-4px);
   transition: opacity 0.18s ease, width 0.18s ease, margin-right 0.18s ease, transform 0.18s ease;
 }
-.wordmark:hover .wm-mark { opacity: 1; width: 15px; margin-right: 7px; transform: translateX(0); }
+/* 헤더 어디에 올려도 아이콘은 나타난다 — "여기 뭔가 있다"는 넓은 힌트 */
+.top:hover .wm-mark { opacity: 1; width: 15px; margin-right: 7px; transform: translateX(0); }
 .wm-roll {
   display: inline-block;
   min-width: 4.6ch;
   font-variant-numeric: tabular-nums;
 }
+/* 실제 굴러가는 이벤트는 로고 텍스트를 정조준했을 때만 — 발견의 손맛은 여기 남긴다 */
 .wordmark:hover .wm-roll { color: var(--accent-ink); }
 
 /* ── 헤드라인 ────────────────────────────────────── */
@@ -456,21 +448,6 @@ td.down { color: var(--down-ink); font-weight: 700; }
 .failure .next { font-weight: 700; }
 .failure .tech { font-family: var(--label); font-size: 11.5px; margin-bottom: 0; opacity: 0.85; }
 .failure button { margin-top: 14px; }
-
-.notice {
-  align-self: center;
-  width: 100%;
-  max-width: 620px;
-  margin-top: 20px;
-  text-align: left;
-  padding: 16px 20px;
-  border-left: 4px solid var(--accent);
-  background: var(--accent-soft);
-  border-radius: 0 8px 8px 0;
-}
-.notice h3 { margin: 0 0 7px; font-size: 14px; font-weight: 700; color: var(--accent-ink); }
-.notice p { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
-.notice .diff-line { margin-bottom: 0; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); }
 
 /* ── 버튼 ────────────────────────────────────────── */
 button {
