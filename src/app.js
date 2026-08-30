@@ -200,37 +200,26 @@ async function runLive() {
   renderLive();
 }
 
-/* ── 다시 조회 버튼: 실제 재조회가 끝나면, 이전 값에서 새 값까지
-   숫자 자체가 감속 곡선을 그리며 세어 올라간다(또는 내려간다).
+/* ── 다시 조회 버튼: 실제 재조회가 끝날 때까지 자릿수가 슬롯머신처럼 계속 굴러가다가,
+   응답이 오면 실제 값에 맞춰 멈춘다.
    저장된 data/daily.json은 절대 건드리지 않는다 — 화면(CURRENT)에만 반영된다. */
 let refreshBusy = false;
+let scrambleTimer = null;
 
-function countUpValue(el, from, to, duration = 480) {
+function startScramble(el) {
   const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (Number.isNaN(from) || from === to) {
-    showRefreshNote('변화 없음 · 방금 확인함');
-    if (!reduceMotion) {
-      el.classList.add('is-same');
-      setTimeout(() => el.classList.remove('is-same'), 700);
-    }
-    return;
-  }
-  if (reduceMotion) { showRefreshNote('갱신됨'); return; }
-  showRefreshNote('갱신됨');
-  el.classList.add('is-counting');
-  const start = performance.now();
-  (function step(now) {
-    const t = Math.min(1, (now - start) / duration);
-    const eased = 1 - Math.pow(1 - t, 3); // ease-out — 끝에 갈수록 느려지며 정확히 멈춘다
-    const val = Math.round(from + (to - from) * eased);
-    el.textContent = comma(val);
-    if (t < 1) {
-      requestAnimationFrame(step);
-    } else {
-      el.textContent = comma(to);
-      el.classList.remove('is-counting');
-    }
-  })(performance.now());
+  if (reduceMotion) return;
+  const pattern = el.dataset.trueText || el.textContent;
+  const digits = '0123456789';
+  el.classList.add('is-scrambling');
+  (function tick() {
+    el.textContent = pattern.replace(/\d/g, () => digits[Math.floor(Math.random() * 10)]);
+    scrambleTimer = setTimeout(tick, 65);
+  })();
+}
+function stopScramble(el) {
+  clearTimeout(scrambleTimer);
+  el.classList.remove('is-scrambling');
 }
 
 let refreshNoteTimer = null;
@@ -268,14 +257,21 @@ async function runRefresh() {
   const prevText = value.dataset.trueText;
   const prevNum = prevText ? Number(prevText.replace(/,/g, '')) : null;
 
+  startScramble(value);
   liveResult = await fetchLive();
   liveState = applyLiveResult(stateFromStore(store), liveResult);
+  stopScramble(value);
 
   btn.classList.remove('is-loading');
-  renderLive(); // 실패 안내·메타·상세를 포함해 화면 전체를 정상적으로 갱신한다
+  renderLive(); // 실패 안내·메타·상세를 포함해 화면 전체를 정상적으로 갱신한다 (숫자도 실제 값으로 확정)
 
-  if (liveResult.outcome === 'success' && prevNum !== null) {
-    countUpValue(value, prevNum, liveResult.reading.normalized_value);
+  if (liveResult.outcome === 'success') {
+    btn.classList.add('confirm');
+    setTimeout(() => btn.classList.remove('confirm'), 900);
+    if (prevNum !== null) {
+      const changed = prevNum !== liveResult.reading.normalized_value;
+      showRefreshNote(changed ? '갱신됨' : '변화 없음 · 방금 확인함');
+    }
   }
 
   cooldownRefresh(btn);

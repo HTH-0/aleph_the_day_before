@@ -224,7 +224,12 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
 }
 .refresh-btn:hover:not([disabled]) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
 .refresh-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.refresh-btn.is-loading svg { animation: spin 0.7s linear infinite; }
+.refresh-btn .icon-refresh { display: inline-flex; }
+.refresh-btn .icon-check { display: none; }
+.refresh-btn.is-loading .icon-refresh { animation: spin 0.7s linear infinite; }
+.refresh-btn.confirm { background: var(--up-soft); border-color: transparent; color: var(--up-ink); }
+.refresh-btn.confirm .icon-refresh { display: none; }
+.refresh-btn.confirm .icon-check { display: inline-flex; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .figure .value {
@@ -250,15 +255,9 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   cursor: default;
   transition: transform 0.15s ease;
 }
-.figure .value.is-counting { transform: scale(1.015); }
+.figure .value.is-scrambling { transform: scale(1.015); }
 .figure .value.is-stale { background: linear-gradient(180deg, var(--muted-2), var(--muted-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.figure .value.is-stale.is-counting { transform: none; }
-@keyframes valueSamePulse {
-  0% { filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
-  35% { filter: drop-shadow(0 0 16px var(--teal-soft)) drop-shadow(0 0 2px var(--teal)); transform: scale(1.02); }
-  100% { filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
-}
-.figure .value.is-same { animation: valueSamePulse 0.7s ease; }
+.figure .value.is-stale.is-scrambling { transform: none; }
 .figure .unit {
   flex-shrink: 0;
   font-family: var(--display);
