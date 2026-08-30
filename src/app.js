@@ -206,9 +206,17 @@ async function runLive() {
 let refreshBusy = false;
 
 function countUpValue(el, from, to, duration = 480) {
-  if (from === to || Number.isNaN(from)) return;
   const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (reduceMotion) return;
+  if (Number.isNaN(from) || from === to) {
+    showRefreshNote('변화 없음 · 방금 확인함');
+    if (!reduceMotion) {
+      el.classList.add('is-same');
+      setTimeout(() => el.classList.remove('is-same'), 700);
+    }
+    return;
+  }
+  if (reduceMotion) { showRefreshNote('갱신됨'); return; }
+  showRefreshNote('갱신됨');
   el.classList.add('is-counting');
   const start = performance.now();
   (function step(now) {
@@ -223,6 +231,16 @@ function countUpValue(el, from, to, duration = 480) {
       el.classList.remove('is-counting');
     }
   })(performance.now());
+}
+
+let refreshNoteTimer = null;
+function showRefreshNote(text) {
+  const note = $('refresh-note');
+  if (!note) return;
+  clearTimeout(refreshNoteTimer);
+  note.textContent = text;
+  note.classList.add('show');
+  refreshNoteTimer = setTimeout(() => note.classList.remove('show'), 1400);
 }
 
 function cooldownRefresh(btn) {
