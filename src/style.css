@@ -154,20 +154,6 @@ a:hover { color: var(--link-ink); text-decoration: underline; }
   flex-wrap: wrap;
   margin-top: 14px;
 }
-.refresh-note {
-  font-family: var(--label);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--teal-ink);
-  background: var(--teal-soft);
-  padding: 3px 9px;
-  border-radius: 999px;
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  pointer-events: none;
-}
-.refresh-note.show { opacity: 1; transform: translateY(0); }
 .info-badge {
   display: inline-flex;
   align-items: center;

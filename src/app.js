@@ -222,16 +222,6 @@ function stopScramble(el) {
   el.classList.remove('is-scrambling');
 }
 
-let refreshNoteTimer = null;
-function showRefreshNote(text) {
-  const note = $('refresh-note');
-  if (!note) return;
-  clearTimeout(refreshNoteTimer);
-  note.textContent = text;
-  note.classList.add('show');
-  refreshNoteTimer = setTimeout(() => note.classList.remove('show'), 1400);
-}
-
 function cooldownRefresh(btn) {
   let left = Math.ceil(SIGNAL.cooldown_ms / 1000);
   btn.disabled = true;
@@ -254,8 +244,6 @@ async function runRefresh() {
   const btn = $('refresh-btn');
   const value = $('value');
   btn.classList.add('is-loading');
-  const prevText = value.dataset.trueText;
-  const prevNum = prevText ? Number(prevText.replace(/,/g, '')) : null;
 
   startScramble(value);
   liveResult = await fetchLive();
@@ -268,10 +256,6 @@ async function runRefresh() {
   if (liveResult.outcome === 'success') {
     btn.classList.add('confirm');
     setTimeout(() => btn.classList.remove('confirm'), 900);
-    if (prevNum !== null) {
-      const changed = prevNum !== liveResult.reading.normalized_value;
-      showRefreshNote(changed ? '갱신됨' : '변화 없음 · 방금 확인함');
-    }
   }
 
   cooldownRefresh(btn);
