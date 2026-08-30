@@ -80,6 +80,7 @@ window.addEventListener('resize', () => {
 /* ── 헤드라인 ────────────────────────────────────── */
 
 function renderLive() {
+  $('sync-notice')?.replaceChildren();
   const status = liveState.status;
   const fresh = status?.freshness === 'fresh';
   const good = lastGoodRow(liveState);
@@ -199,6 +200,81 @@ async function runLive() {
   liveResult = await fetchLive();
   liveState = applyLiveResult(stateFromStore(store), liveResult);
   renderLive();
+}
+
+/* ── 다시 조회 버튼: 진짜 재조회 동안 숫자가 스크램블(로딩 표시)되고,
+   응답이 오면 실제 값에 맞춰진다. 기록값(HISTORY)과 다르면 안내를 띄운다.
+   저장된 data/daily.json은 절대 건드리지 않는다 — 화면(CURRENT)에만 반영된다. */
+let refreshLoopTimer = null;
+let refreshBusy = false;
+
+function startRefreshScramble() {
+  const value = $('value');
+  const trueText = value.dataset.trueText || value.textContent;
+  const digits = '0123456789';
+  value.classList.add('is-scrambling');
+  (function tick() {
+    value.textContent = trueText.replace(/\d/g, () => digits[Math.floor(Math.random() * 10)]);
+    refreshLoopTimer = setTimeout(tick, 70);
+  })();
+}
+function stopRefreshScramble() {
+  clearTimeout(refreshLoopTimer);
+  $('value').classList.remove('is-scrambling');
+}
+
+function renderSyncNotice(reading, storedRow) {
+  const box = $('sync-notice');
+  box.replaceChildren();
+  if (!reading || !storedRow) return;
+  if (storedRow.record_date !== reading.record_date) return; // 비교 대상 날짜가 다르면 비교하지 않는다
+  if (storedRow.normalized_value === reading.normalized_value) return; // 같으면 안내할 게 없다
+  const diff = Math.round((reading.normalized_value - storedRow.normalized_value) * 1e6) / 1e6;
+  box.append(el('div', { className: 'notice' }, [
+    el('h3', {}, '관측값 변동 안내'),
+    el('p', {}, 'GitHub API 인덱스 특성상 동일 날짜라도 조회 시점에 따라 저장소의 삭제·비공개 상태가 반영되어 집계 수치가 달라질 수 있습니다.'),
+    el('p', { className: 'diff-line' },
+      `지금 조회 ${comma(reading.normalized_value)}개 · 기록된 값 ${comma(storedRow.normalized_value)}개 (${storedRow.record_date}) · 차이 ${signed(diff)}개`)
+  ]));
+}
+
+function cooldownRefresh(btn) {
+  let left = Math.ceil(SIGNAL.cooldown_ms / 1000);
+  btn.disabled = true;
+  btn.title = `${left}초 후 다시 조회 가능`;
+  const id = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      clearInterval(id);
+      btn.disabled = false;
+      btn.title = '다시 조회';
+      return;
+    }
+    btn.title = `${left}초 후 다시 조회 가능`;
+  }, 1000);
+}
+
+async function runRefresh() {
+  if (refreshBusy) return;
+  refreshBusy = true;
+  const btn = $('refresh-btn');
+  btn.classList.add('is-loading');
+  startRefreshScramble();
+
+  liveResult = await fetchLive();
+  liveState = applyLiveResult(stateFromStore(store), liveResult);
+
+  stopRefreshScramble();
+  btn.classList.remove('is-loading');
+  renderLive();
+
+  if (liveResult.outcome === 'success') {
+    const storedRow = lastGoodRow(stateFromStore(store)); // data/daily.json 기준 — 실시간 재조회로 안 바뀐다
+    renderSyncNotice(liveResult.reading, storedRow);
+  }
+
+  cooldownRefresh(btn);
+  refreshBusy = false;
 }
 
 /* ── 통계 카드 ───────────────────────────────────── */
@@ -557,6 +633,7 @@ function wireValueScramble() {
   }
 
   value.addEventListener('mouseenter', () => {
+    if (refreshBusy) return; // 실제 재조회 중이면 그쪽 로딩 애니메이션을 방해하지 않는다
     const trueText = value.dataset.trueText;
     if (!trueText || !/\d/.test(trueText)) return; // 값이 없거나 조회 중일 땐 흔들지 않는다
     value.classList.add('is-scrambling');
@@ -564,6 +641,7 @@ function wireValueScramble() {
   });
   value.addEventListener('mouseleave', () => {
     clearTimeout(timer);
+    if (refreshBusy) return; // 재조회 로딩 중엔 그대로 둔다
     if (value.dataset.trueText) value.textContent = value.dataset.trueText;
     value.classList.remove('is-scrambling');
   });
@@ -610,6 +688,7 @@ function wireWordmark() {
 async function boot() {
   wireWordmark();
   wireValueScramble();
+  $('refresh-btn')?.addEventListener('click', runRefresh);
   try {
     const response = await fetch('./data/daily.json', { cache: 'no-store' });
     if (response.ok) {
