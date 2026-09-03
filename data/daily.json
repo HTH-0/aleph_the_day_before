@@ -2,7 +2,7 @@
   "schema_version": "t04-daily-store-v1",
   "signal_id": "github-repos-created-daily",
   "record_timezone": "Asia/Seoul",
-  "generated_at": "2026-09-02T04:56:30.262Z",
+  "generated_at": "2026-09-03T04:53:34.802Z",
   "rows": [
     {
       "record_id": "github-repos-created-daily:2026-08-28",
@@ -170,6 +170,34 @@
         "target_date_kst": "2026-09-01",
         "created_range": "2026-09-01T00:00:00+09:00 .. 2026-09-01T23:59:59+09:00",
         "rate_limit_remaining": 9
+      }
+    },
+    {
+      "record_id": "github-repos-created-daily:2026-09-03",
+      "signal_id": "github-repos-created-daily",
+      "record_date": "2026-09-03",
+      "normalized_value": 380585,
+      "unit": "개",
+      "first_fetched_at": "2026-09-03T04:53:34.508Z",
+      "last_fetched_at": "2026-09-03T04:53:34.508Z",
+      "update_count": 1,
+      "reading": {
+        "signal_id": "github-repos-created-daily",
+        "normalized_value": 380585,
+        "unit": "개",
+        "source_name": "GitHub REST API — 저장소 검색",
+        "source_url": "https://api.github.com/search/repositories?q=created%3A2026-09-02T00%3A00%3A00%2B09%3A00..2026-09-02T23%3A59%3A59%2B09%3A00&per_page=1",
+        "source_time": "2026-09-02T14:59:59.000Z",
+        "fetched_at": "2026-09-03T04:53:34.508Z",
+        "record_timezone": "Asia/Seoul",
+        "record_date": "2026-09-03"
+      },
+      "raw_excerpt": {
+        "total_count": 380585,
+        "incomplete_results": false,
+        "target_date_kst": "2026-09-02",
+        "created_range": "2026-09-02T00:00:00+09:00 .. 2026-09-02T23:59:59+09:00",
+        "rate_limit_remaining": 6
       }
     }
   ]
