@@ -23,6 +23,7 @@ const comma = (n) => Number(n).toLocaleString('ko-KR');
 const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${comma(Math.abs(n))}`;
 // 표에는 같은 행에 날짜 열이 이미 있어서, 시각 열은 날짜를 반복하지 않고 시:분:초만 남긴다
 const kstTime = (iso) => kstStamp(iso)?.slice(11, 19) ?? '—';
+const kstDatePart = (iso) => kstStamp(iso)?.slice(0, 10) ?? null;
 
 let store = emptyStore(SIGNAL.signal_id);
 let liveResult = null;
@@ -390,6 +391,7 @@ function renderDaily() {
       '첫 실제 조회가 기록되면 여기에 한 줄이 생깁니다.')));
     return;
   }
+  const trs = [];
   rows.forEach((row, i) => {
     const prev = rows[i - 1];
     let delta = '—';
@@ -399,8 +401,12 @@ function renderDaily() {
       delta = `${signed(d)} ${row.unit}`;
       cls = `num ${d > 0 ? 'up' : d < 0 ? 'down' : ''}`;
     }
+    const countedDate = kstDatePart(row.reading?.source_time);
     const tr = el('tr', {}, [
-      el('td', { className: 'mono' }, row.record_date),
+      el('td', { className: 'mono' }, [
+        row.record_date,
+        countedDate ? el('span', { className: 'date-note' }, `${countedDate} 데이터`) : ''
+      ]),
       el('td', { className: 'num big' }, comma(row.normalized_value)),
       el('td', {}, row.unit),
       el('td', { className: cls }, delta),
@@ -410,8 +416,11 @@ function renderDaily() {
         : '—')
     ]);
     tr.dataset.date = row.record_date; // el()의 Object.assign은 dataset을 직접 못 받아 따로 지정한다
-    body.append(tr);
+    trs.push(tr);
   });
+  // 표는 최신 기록이 스크롤 없이 바로 보이도록 최신순으로 뒤집어서 넣는다.
+  // delta 계산은 위에서 이미 시간순으로 끝냈으니 순서만 뒤집으면 된다.
+  body.append(...trs.reverse());
 }
 
 /* ── 히스토리 스트립 ─────────────────────────────────

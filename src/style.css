@@ -460,6 +460,8 @@ tr.row-highlight td:last-child { border-radius: 0 0 8px 0; }
 
 /* ── 표 ──────────────────────────────────────────── */
 .scroll { overflow-x: auto; }
+.history-scroll { max-height: 430px; overflow-y: auto; }
+.history-scroll thead th { position: sticky; top: 0; background: var(--bg); }
 table { width: 100%; border-collapse: collapse; font-size: 15px; }
 th, td { text-align: left; padding: 13px 15px 13px 0; border-bottom: 1px solid var(--line-soft); white-space: nowrap; transition: background 0.12s ease; }
 thead th {
@@ -471,6 +473,7 @@ thead th {
   border-bottom-color: var(--line);
 }
 tbody tr:last-child td { border-bottom: 0; }
+.date-note { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--muted-2); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.big { font-size: 18px; font-weight: 800; }
 td.up { color: var(--up-ink); font-weight: 700; }
