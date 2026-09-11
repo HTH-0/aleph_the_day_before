@@ -441,6 +441,9 @@ function renderStrip(rows) {
   const first = new Date(`${rows[0].record_date}T00:00:00Z`);
   const firstSunday = new Date(first);
   firstSunday.setUTCDate(first.getUTCDate() - first.getUTCDay());
+  const last = new Date(`${rows[rows.length - 1].record_date}T00:00:00Z`);
+  const weekCount = Math.floor((last - firstSunday) / (7 * 86400000)) + 1;
+  strip.style.setProperty('--week-count', String(weekCount));
 
   // 요일 라벨(월/수/금)
   WEEKDAY_LABELS.forEach((label, i) => {

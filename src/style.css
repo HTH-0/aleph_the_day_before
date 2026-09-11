@@ -400,9 +400,8 @@ section { margin-top: 88px; }
 
 .history-strip {
   display: grid;
+  grid-template-columns: 28px repeat(var(--week-count), 14px);
   grid-template-rows: repeat(7, 14px);
-  grid-auto-columns: 14px;
-  grid-auto-flow: column;
   gap: 5px;
   padding: 22px 24px 26px;
   margin-bottom: 40px;
@@ -413,7 +412,7 @@ section { margin-top: 88px; }
 }
 .strip-wd {
   grid-column: 1;
-  width: 14px;
+  width: 28px;
   height: 14px;
   font-family: var(--label);
   font-size: 10px;
@@ -427,6 +426,8 @@ section { margin-top: 88px; }
 .strip-cell {
   width: 14px;
   height: 14px;
+  padding: 0;
+  border: 0;
   border-radius: 3px;
   background: #ebedf0;
   cursor: pointer;
