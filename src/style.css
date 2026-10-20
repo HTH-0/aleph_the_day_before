@@ -375,8 +375,8 @@ details.detail[open] > summary .arrow { transform: rotate(180deg); }
 .stat-cell.teal dd { color: var(--teal-ink); }
 
 /* ── 차트 ────────────────────────────────────────── */
-.chart-wrap { margin-top: 44px; }
-svg.chart { display: block; width: 100%; height: auto; }
+.chart-wrap { margin-top: 44px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+svg.chart { display: block; max-width: none; }
 .chart .grid { stroke: var(--line); stroke-width: 1; }
 .chart .grid.zero { stroke: var(--line-soft); }
 .chart .axis { fill: var(--muted-2); font-family: var(--label); font-size: 13px; font-weight: 700; }

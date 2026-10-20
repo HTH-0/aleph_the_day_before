@@ -312,9 +312,14 @@ function cell(label, value, unit, sub, tone = '') {
 function renderChart(rows) {
   const node = $('chart');
   node.replaceChildren();
-  const W = 1040;
+  const STEP = 130;
   const H = 320;
-  const pad = { top: 40, right: 24, bottom: 40, left: 24 };
+  const pad = { top: 40, right: 64, bottom: 40, left: 64 };
+  const wrap = node.parentElement;
+  const W = Math.max(wrap.clientWidth || 1040, pad.left + pad.right + Math.max(rows.length - 1, 1) * STEP);
+  node.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  node.setAttribute('width', W);
+  node.setAttribute('height', H);
 
   const defs = svg('defs');
   const grad = svg('linearGradient', { id: 'areaFill', x1: 0, y1: 0, x2: 0, y2: 1 });
@@ -369,10 +374,10 @@ function renderChart(rows) {
     const cy = y(row.normalized_value);
     node.append(svg('circle', { class: 'dot-outer', cx, cy, r: 7 }));
     node.append(svg('circle', { class: 'dot-inner', cx, cy, r: 3 }));
-    const anchor = rows.length === 1 ? 'middle' : i === 0 ? 'start' : i === rows.length - 1 ? 'end' : 'middle';
-    node.append(svg('text', { class: 'dot-label', x: cx, y: cy - 18, 'text-anchor': anchor }, comma(row.normalized_value)));
-    node.append(svg('text', { class: 'axis', x: cx, y: base + 24, 'text-anchor': anchor }, row.record_date.slice(5)));
+    node.append(svg('text', { class: 'dot-label', x: cx, y: cy - 18, 'text-anchor': 'middle' }, comma(row.normalized_value)));
+    node.append(svg('text', { class: 'axis', x: cx, y: base + 24, 'text-anchor': 'middle' }, row.record_date.slice(5)));
   });
+  wrap.scrollLeft = wrap.scrollWidth;
 }
 
 /* ── HISTORY ─────────────────────────────────────── */
